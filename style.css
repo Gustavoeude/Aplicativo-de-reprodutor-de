@@ -2110,3 +2110,22 @@ main { overflow-x: clip; }
   .stagger * { animation: none !important; }
   .page.enter-from-right, .page.enter-from-left { animation: none; }
 }
+
+
+/* ===== v25: página do lado visível durante o arrasto (sem tela preta) ===== */
+.page.peek {
+  display: block !important;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 0;
+  animation: none !important;
+}
+.page.no-enter { animation: none !important; }
+
+/* ===== v25: sem pisco — o conteúdo nunca fica invisível ao trocar de página ===== */
+@keyframes riseIn { from { translate: 0 14px; scale: .97; } }
+@keyframes popIn  { from { scale: .6; rotate: -10deg; } }
+@keyframes pageEnter { from { transform: translateY(8px); } }

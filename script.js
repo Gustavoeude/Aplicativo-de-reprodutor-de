@@ -440,7 +440,8 @@ function cleanupLeaving() {
   });
 }
 
-function openPage(name) {
+function openPage(name, opts) {
+  opts = opts || {};
   const prev = document.body.dataset.page;
   const same = prev === name;
   const reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -461,10 +462,11 @@ function openPage(name) {
 
   if (!same && !reduced) {
     outEl.classList.add("leaving", dir > 0 ? "leave-left" : "leave-right");
-    inEl.classList.add(dir > 0 ? "enter-from-right" : "enter-from-left", "stagger");
+    if (opts.fromDrag) inEl.classList.add("no-enter");
+    else inEl.classList.add(dir > 0 ? "enter-from-right" : "enter-from-left", "stagger");
     pageTimer = setTimeout(() => {
       cleanupLeaving();
-      inEl.classList.remove("enter-from-right", "enter-from-left", "stagger");
+      inEl.classList.remove("enter-from-right", "enter-from-left", "stagger", "no-enter");
     }, 950);
   }
 
@@ -488,13 +490,42 @@ document.querySelectorAll(".nav-item").forEach(b => {
 (function initPageSwipe() {
   let sx = 0, sy = 0, st = 0, dx = 0;
   let active = false, engaged = false, page = null;
+  let peekName = null, peekEl = null;
 
   const BLOCK = ".hscroll, .filters, input, textarea, .seek-wrap, .sheet, .dialog, .scrim, .full-player, .now-playing, .bottom-nav, .playlist-bar";
+  const EASE = "cubic-bezier(.22, 1, .36, 1)";
 
   function neighborFor(delta) {
     const i = pageOrder.indexOf(document.body.dataset.page);
     const step = (delta < 0 ? 1 : -1) * (settings.swipeInvert ? -1 : 1);
     return pageOrder[i + step] || null;
+  }
+
+  function width() {
+    return (page && page.getBoundingClientRect().width) || window.innerWidth;
+  }
+
+  // mostra a página do lado junto com a atual (assim nunca fica tela vazia)
+  function setPeek(name) {
+    if (name === peekName) return;
+    clearPeek();
+    if (!name) return;
+    peekName = name;
+    peekEl = $(pageIds[name]);
+    if (name === "search") renderSearch();
+    if (name === "library") renderLibrary();
+    peekEl.style.transition = "none";
+    peekEl.classList.add("peek");
+  }
+
+  function clearPeek() {
+    if (peekEl) {
+      peekEl.classList.remove("peek");
+      peekEl.style.transform = "";
+      peekEl.style.transition = "";
+    }
+    peekName = null;
+    peekEl = null;
   }
 
   document.addEventListener("touchstart", e => {
@@ -511,6 +542,7 @@ document.querySelectorAll(".nav-item").forEach(b => {
     engaged = false;
     active = true;
     page = $(pageIds[document.body.dataset.page]);
+    clearPeek();
   }, { passive: true });
 
   document.addEventListener("touchmove", e => {
@@ -530,9 +562,16 @@ document.querySelectorAll(".nav-item").forEach(b => {
 
     e.preventDefault();
     dx = mx;
-    const has = !!neighborFor(dx);
-    const k = has ? 1 : 0.16; // sem página do outro lado: efeito elástico
-    page.style.transform = "translateX(" + (dx * k).toFixed(1) + "px)";
+    const target = neighborFor(dx);
+    setPeek(target);
+
+    const W = width();
+    if (target) {
+      page.style.transform = "translateX(" + dx.toFixed(1) + "px)";
+      peekEl.style.transform = "translateX(" + (dx + (dx < 0 ? W : -W)).toFixed(1) + "px)";
+    } else {
+      page.style.transform = "translateX(" + (dx * 0.16).toFixed(1) + "px)"; // sem página do outro lado: elástico
+    }
   }, { passive: false });
 
   function finish() {
@@ -543,18 +582,35 @@ document.querySelectorAll(".nav-item").forEach(b => {
 
     const v = Math.abs(dx) / Math.max(1, performance.now() - st);
     const target = neighborFor(dx);
+    const W = width();
     page.classList.remove("dragging");
 
-    if (target && (Math.abs(dx) > 70 || v > 0.5)) {
+    if (target && peekEl && (Math.abs(dx) > 70 || v > 0.5)) {
+      // conclui: a página do lado termina de entrar, a atual termina de sair
+      const inEl = peekEl;
+      peekName = null;
+      peekEl = null;
       page.style.transition = "";
-      openPage(target);
+      openPage(target, { fromDrag: true });
+      inEl.classList.remove("peek");
+      void inEl.offsetWidth;
+      inEl.style.transition = "transform .42s " + EASE;
+      inEl.style.transform = "";
+      setTimeout(() => { inEl.style.transition = ""; }, 460);
     } else {
       // volta com efeito de mola
-      page.style.transition = "transform .5s var(--spring), opacity .3s ease";
-      page.style.transform = "";
-      page.style.opacity = "";
-      const p = page;
-      setTimeout(() => { p.style.transition = ""; }, 520);
+      const cur = page;
+      const other = peekEl;
+      cur.style.transition = "transform .5s var(--spring)";
+      cur.style.transform = "";
+      if (other) {
+        other.style.transition = "transform .5s var(--spring)";
+        other.style.transform = "translateX(" + (dx < 0 ? W : -W) + "px)";
+      }
+      setTimeout(() => {
+        cur.style.transition = "";
+        clearPeek();
+      }, 520);
     }
   }
 
