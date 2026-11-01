@@ -224,7 +224,7 @@ let homeMain = null;
 let lrcTargetId = null;
 let seed = { h: 215, s: 0.8 };
 let settings = Object.assign(
-  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false },
+  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false, font: "roboto" },
   lsGet("settings", {})
 );
 if (!settings.shapes || typeof settings.shapes !== "object") settings.shapes = {};
@@ -2030,6 +2030,7 @@ function applySettings() {
   document.body.classList.toggle("amoled", !!settings.amoled);
   document.body.classList.toggle("disc", !!settings.disc);
   applyShapes();
+  applyFont();
   renderGreeting();
   updateColor();
 }
@@ -2146,6 +2147,79 @@ function openSettings() {
   permRow.onclick = () => openPermissions(false);
   sec.appendChild(permRow);
 
+  const fontSec = el("div", "set-sec");
+  fontSec.appendChild(el("div", "set-label", "Fonte das letras"));
+
+  const fontRows = [];
+  const paintFonts = () => {
+    fontRows.forEach(({ id, check }) => {
+      check.replaceChildren();
+      if (settings.font === id) check.appendChild(el("span", "material-symbols-rounded", "check"));
+    });
+  };
+
+  const fontRow = (id, name, note, family, deletable) => {
+    const row = el("div", "set-row font-row");
+    const main = el("button", "font-main");
+    const text = el("div", "set-row-text");
+    const title = el("strong", "", name);
+    title.style.fontFamily = family;
+    text.append(title, el("span", "", note));
+    const check = el("span", "font-check");
+    main.append(text, check);
+    main.onclick = () => {
+      settings.font = id;
+      saveSettings();
+      applyFont();
+      paintFonts();
+    };
+    row.appendChild(main);
+
+    if (deletable) {
+      const del = el("button", "font-del");
+      del.setAttribute("aria-label", "Apagar fonte");
+      del.appendChild(el("span", "material-symbols-rounded", "delete"));
+      del.onclick = async () => {
+        const ok = await showDialog({
+          title: "Apagar essa fonte?",
+          text: "“" + name + "” será removida do app.",
+          confirmLabel: "Apagar",
+          danger: true
+        });
+        if (!ok) return;
+        customFonts = customFonts.filter(f => f.id !== id);
+        fontDbDelete(id);
+        if (settings.font === id) {
+          settings.font = "roboto";
+          saveSettings();
+          applyFont();
+        }
+        openSettings();
+      };
+      row.appendChild(del);
+    }
+
+    fontRows.push({ id, check });
+    fontSec.appendChild(row);
+  };
+
+  GOOGLE_FONTS.forEach(f => {
+    ensureGoogleFont(f);
+    fontRow(f.id, f.name, f.note, f.id === "system" ? "system-ui" : '"' + f.family + '", system-ui, sans-serif', false);
+  });
+  customFonts.forEach(f => fontRow(f.id, f.name, "Importada por você", '"' + f.family + '", system-ui, sans-serif', true));
+
+  const importRow = el("button", "set-row");
+  const importText = el("div", "set-row-text");
+  importText.append(
+    el("strong", "", "Importar fonte"),
+    el("span", "", "Escolha um arquivo .ttf, .otf ou .woff2 do seu celular")
+  );
+  importRow.append(importText, el("span", "material-symbols-rounded", "upload_file"));
+  importRow.onclick = () => $("fontInput").click();
+  fontSec.appendChild(importRow);
+  paintFonts();
+
   const shapeSec = el("div", "set-sec");
   shapeSec.appendChild(el("div", "set-label", "Formas das bolinhas"));
 
@@ -2176,6 +2250,7 @@ function openSettings() {
   };
   shapeSec.appendChild(resetRow);
   sheet.appendChild(sec);
+  sheet.appendChild(fontSec);
   sheet.appendChild(shapeSec);
 
   scrim.onclick = closeSheet;
@@ -2443,6 +2518,146 @@ async function maybeAskPermissionsFirstRun() {
   setTimeout(() => openPermissions(true), 1500);
 }
 
+
+/* ==========================================================
+   Fontes (do Google, do sistema e importadas por você)
+   ========================================================== */
+const GOOGLE_FONTS = [
+  { id: "roboto", name: "Roboto", note: "Padrão do app", family: "Roboto", css: null },
+  { id: "poppins", name: "Poppins", note: "Redonda e moderna", family: "Poppins", css: "Poppins:wght@400;500;700;900" },
+  { id: "nunito", name: "Nunito", note: "Suave e arredondada", family: "Nunito", css: "Nunito:wght@400;500;700;900" },
+  { id: "montserrat", name: "Montserrat", note: "Geométrica", family: "Montserrat", css: "Montserrat:wght@400;500;700;900" },
+  { id: "playfair", name: "Playfair Display", note: "Elegante, com serifa", family: "Playfair Display", css: "Playfair+Display:wght@400;500;700;900" },
+  { id: "pixelify", name: "Pixelify Sans", note: "Pixelada, parecida com a do Minecraft", family: "Pixelify Sans", css: "Pixelify+Sans:wght@400;500;700", pixel: true },
+  { id: "silkscreen", name: "Silkscreen", note: "Pixelada, em maiúsculas", family: "Silkscreen", css: "Silkscreen:wght@400;700", pixel: true },
+  { id: "pressstart", name: "Press Start 2P", note: "Pixelada de arcade (bem larga)", family: "Press Start 2P", css: "Press+Start+2P", pixel: true, wide: true },
+  { id: "system", name: "Fonte do sistema", note: "A do seu Android", family: "system-ui", css: null }
+];
+
+let customFonts = []; // { id, name, family, data }
+
+const fontDbReady = (() => {
+  try {
+    return new Promise(resolve => {
+      const req = indexedDB.open("musica-fonts", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("fonts", { keyPath: "id" });
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    });
+  } catch (_) {
+    return Promise.resolve(null);
+  }
+})();
+
+async function fontDbPut(rec) {
+  const db = await fontDbReady;
+  if (!db) return;
+  db.transaction("fonts", "readwrite").objectStore("fonts").put(rec);
+}
+
+async function fontDbDelete(id) {
+  const db = await fontDbReady;
+  if (!db) return;
+  db.transaction("fonts", "readwrite").objectStore("fonts").delete(id);
+}
+
+async function fontDbAll() {
+  const db = await fontDbReady;
+  if (!db) return [];
+  return new Promise(resolve => {
+    const req = db.transaction("fonts").objectStore("fonts").getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => resolve([]);
+  });
+}
+
+const loadedFontCss = new Set();
+function ensureGoogleFont(f) {
+  if (!f || !f.css || loadedFontCss.has(f.id)) return;
+  loadedFontCss.add(f.id);
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = "https://fonts.googleapis.com/css2?family=" + f.css + "&display=swap";
+  document.head.appendChild(link);
+}
+
+async function registerCustomFont(rec) {
+  const face = new FontFace(rec.family, rec.data, { weight: "100 900", style: "normal" });
+  await face.load();
+  document.fonts.add(face);
+}
+
+async function loadCustomFonts() {
+  const all = await fontDbAll();
+  for (const rec of all) {
+    try {
+      await registerCustomFont(rec);
+      customFonts.push(rec);
+    } catch (_) {}
+  }
+  applyFont();
+}
+
+function applyFont() {
+  const root = document.documentElement;
+  const g = GOOGLE_FONTS.find(f => f.id === settings.font);
+  const c = customFonts.find(f => f.id === settings.font);
+
+  let family = '"Roboto", system-ui, sans-serif';
+  let pixel = false, wide = false, custom = false;
+
+  if (g) {
+    ensureGoogleFont(g);
+    family = g.id === "system" ? "system-ui, sans-serif" : '"' + g.family + '", system-ui, sans-serif';
+    pixel = !!g.pixel;
+    wide = !!g.wide;
+    custom = g.id !== "roboto";
+  } else if (c) {
+    family = '"' + c.family + '", system-ui, sans-serif';
+    custom = true;
+  }
+
+  root.style.setProperty("--app-font", family);
+  document.body.classList.toggle("font-custom", custom);
+  document.body.classList.toggle("font-pixel", pixel);
+  document.body.classList.toggle("font-wide", wide);
+}
+
+function cleanFontName(fileName) {
+  return fileName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 40) || "Minha fonte";
+}
+
+async function importFontFile(file) {
+  if (!file) return;
+  if (file.size > 15 * 1024 * 1024) {
+    showToast("Essa fonte é grande demais (máximo 15 MB)");
+    return;
+  }
+
+  const id = "custom-" + Date.now();
+  const rec = { id, name: cleanFontName(file.name), family: "UserFont-" + id, data: await file.arrayBuffer() };
+
+  try {
+    await registerCustomFont(rec);
+  } catch (_) {
+    showToast("Esse arquivo não parece ser uma fonte válida");
+    return;
+  }
+
+  customFonts.push(rec);
+  await fontDbPut(rec);
+  settings.font = id;
+  saveSettings();
+  applyFont();
+  showToast("Fonte “" + rec.name + "” adicionada");
+}
+
+$("fontInput").addEventListener("change", () => {
+  const file = $("fontInput").files && $("fontInput").files[0];
+  importFontFile(file);
+  $("fontInput").value = "";
+});
+
 $("homeSettings").onclick = openSettings;
 
 /* ==========================================================
@@ -2634,6 +2849,7 @@ updateHome();
 updatePlayButtons();
 renderLyrics(null);
 initMediaSessionHandlers();
+loadCustomFonts();
 $("homePage").classList.add("stagger");
 setTimeout(() => $("homePage").classList.remove("stagger"), 1100);
 

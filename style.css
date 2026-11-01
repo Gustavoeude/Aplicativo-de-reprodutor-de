@@ -2129,3 +2129,42 @@ main { overflow-x: clip; }
 @keyframes riseIn { from { translate: 0 14px; scale: .97; } }
 @keyframes popIn  { from { scale: .6; rotate: -10deg; } }
 @keyframes pageEnter { from { transform: translateY(8px); } }
+
+
+/* ===== v26: fonte escolhida pelo usuário ===== */
+body, button, input, textarea, select {
+  font-family: var(--app-font, Roboto, system-ui, sans-serif);
+}
+
+body.font-custom .hero h1 { letter-spacing: -1px; line-height: .92; }
+body.font-custom .page-heading h1 { letter-spacing: -1px; }
+body.font-pixel { font-synthesis: none; }
+body.font-pixel .hero h1 { font-size: clamp(46px, 13vw, 66px); letter-spacing: 0; line-height: 1.05; }
+body.font-pixel .page-heading h1 { font-size: 46px; letter-spacing: 0; }
+body.font-wide .hero h1 { font-size: clamp(32px, 9vw, 42px); line-height: 1.25; }
+body.font-wide .page-heading h1 { font-size: 30px; }
+body.font-wide .home-eyebrow, body.font-wide .eyebrow { letter-spacing: 0; }
+
+.font-row { padding-right: 0; }
+.font-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  color: inherit;
+  border-radius: 14px;
+  padding: 0 2px;
+}
+.font-main:active { background: color-mix(in srgb, var(--md-on-surface) 10%, transparent); }
+.font-main .set-row-text { flex: 1; min-width: 0; }
+.font-check { width: 28px; flex-shrink: 0; color: var(--md-primary); display: grid; place-items: center; }
+.font-del {
+  width: 44px; height: 44px; flex-shrink: 0;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  color: var(--md-on-surface-variant);
+}
+.font-del:active { background: color-mix(in srgb, var(--md-on-surface) 12%, transparent); }
