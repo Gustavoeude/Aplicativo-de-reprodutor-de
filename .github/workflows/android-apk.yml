@@ -1,0 +1,60 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "script.js"
+      - "style.css"
+      - "jsmediatags.min.js"
+      - "manifest.json"
+      - "icon-*.png"
+      - "package.json"
+      - "package-lock.json"
+      - "capacitor.config.json"
+      - "scripts/**"
+      - ".github/workflows/android-apk.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Preparar arquivos web
+        run: npm run build:web
+
+      - name: Gerar projeto Android com Capacitor
+        run: npx cap add android
+
+      - name: Sincronizar projeto Android
+        run: npx cap sync android
+
+      - name: Compilar APK de teste
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Disponibilizar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: reprodutor-musical-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
