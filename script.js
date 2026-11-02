@@ -977,18 +977,29 @@ function chooseLyricsRecord(song, records, duration) {
   const title = normalizeLyricsLookup(lyricsLookupTitle(song));
   if (!title || !Array.isArray(records)) return null;
   const artist = lyricsLookupArtist(song);
-  let candidates = records.filter(record =>
-    normalizeLyricsLookup(record.trackName || record.name) === title &&
-    (!artist || normalizeLyricsLookup(record.artistName) === artist)
+  // Primeiro tenta título + artista exatos. Se o cadastro do artista variar,
+  // mantém os resultados do título e só aceita quando não houver ambiguidade.
+  const titleMatches = records.filter(record =>
+    normalizeLyricsLookup(record.trackName || record.name) === title
   );
+  if (!titleMatches.length) return null;
+
+  let candidates = artist
+    ? titleMatches.filter(record => normalizeLyricsLookup(record.artistName) === artist)
+    : titleMatches;
+
+  if (!candidates.length) candidates = titleMatches;
+
+  const artists = new Set(candidates.map(record => normalizeLyricsLookup(record.artistName)).filter(Boolean));
+  if (artists.size > 1) return null;
+
+  // A duração ajuda a escolher uma versão, mas não deve eliminar uma letra
+  // válida quando o arquivo tem alguns segundos de diferença.
   if (Number.isFinite(duration)) {
-    candidates = candidates.filter(record =>
-      Number.isFinite(Number(record.duration)) && Math.abs(Number(record.duration) - duration) <= 2
+    const durationMatches = candidates.filter(record =>
+      Number.isFinite(Number(record.duration)) && Math.abs(Number(record.duration) - duration) <= 5
     );
-  }
-  if (!artist) {
-    const artists = new Set(candidates.map(record => normalizeLyricsLookup(record.artistName)).filter(Boolean));
-    if (artists.size > 1) return null;
+    if (durationMatches.length) candidates = durationMatches;
   }
   if (!duration && candidates.length > 1) {
     const albums = new Set(candidates.map(record => normalizeLyricsLookup(record.albumName)).filter(Boolean));
@@ -1030,13 +1041,23 @@ async function fetchLyricsRecord(song) {
   }
   if (response.status === 429) {
     const error = new Error("rate-limited");
-    error.retryAfter = Math.max(1, Number(response.headers.get("Retry-After")) || 60);
+    const retryHeader = response.headers.get("Retry-After");
+    const retrySeconds = Number(retryHeader);
+    const retryDate = retryHeader && Number.isNaN(retrySeconds) ? Date.parse(retryHeader) : NaN;
+    error.retryAfter = Math.max(1, Number.isFinite(retrySeconds) && retrySeconds > 0
+      ? retrySeconds
+      : Number.isFinite(retryDate) ? Math.ceil((retryDate - Date.now()) / 1000) : 60);
     error.retryReason = "rate";
     throw error;
   }
   if (response.status === 503) {
     const error = new Error("service-busy");
-    error.retryAfter = Math.max(1, Number(response.headers.get("Retry-After")) || 5);
+    const retryHeader = response.headers.get("Retry-After");
+    const retrySeconds = Number(retryHeader);
+    const retryDate = retryHeader && Number.isNaN(retrySeconds) ? Date.parse(retryHeader) : NaN;
+    error.retryAfter = Math.max(1, Number.isFinite(retrySeconds) && retrySeconds > 0
+      ? retrySeconds
+      : Number.isFinite(retryDate) ? Math.ceil((retryDate - Date.now()) / 1000) : 5);
     error.retryReason = "busy";
     throw error;
   }
