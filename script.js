@@ -1544,7 +1544,7 @@ function openSongMenu(song, opts = {}) {
   }
 
   actions.push({
-    icon: "photo_library",
+    icon: "edit",
     label: song.coverBlob ? "Trocar capa pela galeria" : "Escolher capa da galeria",
     run: () => pickCoverFor(song.id)
   });
