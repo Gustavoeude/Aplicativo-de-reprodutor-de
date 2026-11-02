@@ -1150,6 +1150,58 @@ function requestOnlineLyrics(song, force = false) {
   return tracked;
 }
 
+async function fetchOnlineCover(song) {
+  if (!song || song.coverBlob || !song.name) return false;
+  const query = [song.name, song.artist].filter(Boolean).join(" ");
+  try {
+    const response = await fetch("https://itunes.apple.com/search?term=" + encodeURIComponent(query) + "&entity=song&limit=8");
+    if (!response.ok) return false;
+    const data = await response.json();
+    const normalize = value => String(value || "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const title = normalize(song.name);
+    const artist = normalize(song.artist);
+    const matches = (data.results || []).filter(item =>
+      normalize(item.trackName) === title &&
+      (!artist || normalize(item.artistName).includes(artist) || artist.includes(normalize(item.artistName)))
+    );
+    const match = matches[0] || (data.results || []).find(item => normalize(item.trackName) === title);
+    if (!match || !match.artworkUrl100) return false;
+    const imageUrl = match.artworkUrl100.replace(/100x100bb/, "600x600bb");
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) return false;
+    const blob = await imageResponse.blob();
+    if (!blob.type.startsWith("image/")) return false;
+    song.coverBlob = blob;
+    if (song.cover) URL.revokeObjectURL(song.cover);
+    song.cover = URL.createObjectURL(blob);
+    await dbPut(toRecord(song));
+    refreshAll();
+    if (song.id === currentId) updateFullPlayer();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function pickCoverFor(songId) {
+  const song = getSong(songId);
+  if (!song) return;
+  const input = $("coverInput");
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    input.value = "";
+    if (!file || !file.type.startsWith("image/")) return;
+    song.coverBlob = file;
+    if (song.cover) URL.revokeObjectURL(song.cover);
+    song.cover = URL.createObjectURL(file);
+    await dbPut(toRecord(song));
+    refreshAll();
+    if (song.id === currentId) updateFullPlayer();
+    showToast("Capa atualizada");
+  };
+  input.click();
+}
+
 async function addFile(file, automaticLyrics = "") {
   const sourceKey = fileIdentity(file);
   const duplicate = songs.find(s => s.file && (s.sourceKey || fileIdentity(s.file)) === sourceKey);
@@ -1220,10 +1272,12 @@ async function addFile(file, automaticLyrics = "") {
 
         dbPut(toRecord(song));
         refreshAll();
+        if (!song.coverBlob) fetchOnlineCover(song);
         if (!song.lyrics && settings.autoLyrics) requestOnlineLyrics(song);
         },
         onError: () => {
           refreshAll();
+          fetchOnlineCover(song);
           if (!song.lyrics && settings.autoLyrics) requestOnlineLyrics(song);
         }
       });
@@ -1231,8 +1285,9 @@ async function addFile(file, automaticLyrics = "") {
       showToast("A música foi adicionada, mas não consegui ler suas informações.");
       if (!song.lyrics && settings.autoLyrics) requestOnlineLyrics(song);
     }
-  } else if (!song.lyrics && settings.autoLyrics) {
-    requestOnlineLyrics(song);
+  } else {
+    fetchOnlineCover(song);
+    if (!song.lyrics && settings.autoLyrics) requestOnlineLyrics(song);
   }
 
   return { added: true, stored, lyricsAdded: !!automaticLyrics };
@@ -1465,6 +1520,21 @@ function openSongMenu(song, opts = {}) {
         run: () => toggleInPlaylist(p, song)
       });
     }
+  }
+
+  actions.push({
+    icon: "image",
+    label: song.coverBlob ? "Trocar capa" : "Buscar capa na internet",
+    run: () => song.coverBlob ? pickCoverFor(song.id) : fetchOnlineCover(song).then(found => {
+      if (!found) showToast("Não encontrei uma capa; você pode escolher uma imagem.");
+    })
+  });
+  if (!song.coverBlob) {
+    actions.push({
+      icon: "add_photo_alternate",
+      label: "Escolher capa da galeria",
+      run: () => pickCoverFor(song.id)
+    });
   }
 
   actions.push({
