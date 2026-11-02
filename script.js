@@ -38,12 +38,7 @@ const ICONS = {
   "storage": "M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z",
   "folder": "M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z",
   "restart_alt": "M12 5V2L8 6l4 4V7c3.31 0 6 2.69 6 6 0 2.97-2.17 5.43-5 5.91v2.02c3.95-.49 7-3.85 7-7.93 0-4.42-3.58-8-8-8zm-6 8c0-1.65.67-3.15 1.76-4.24L6.34 7.34C4.9 8.79 4 10.79 4 13c0 4.08 3.05 7.44 7 7.93v-2.02c-2.83-.48-5-2.94-5-5.91z",
-  "edit": "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z",
-  "palette": "M12 3a9 9 0 100 18h1a2 2 0 002-2c0-.55-.22-1.05-.59-1.41-.25-.26-.41-.58-.41-.94a1 1 0 011-1h2a5 5 0 005-5c0-4.42-4.03-8-10-8zM8 13a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm3-4a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm4 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm3 4a1.5 1.5 0 110-3 1.5 1.5 0 010 3z",
-  "touch_app": "M9 11.24V5a3 3 0 016 0v6.26l1.11-1.11a1.5 1.5 0 012.12 0l2.12 2.12a2 2 0 01.46 2.18l-2.1 5.26A2 2 0 0116.85 21H11a2 2 0 01-1.41-.59l-5.3-5.3a2.5 2.5 0 013.54-3.54L9 12.74v-1.5z",
-  "auto_awesome": "M12 3l1.6 5.4L19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6L12 3zm7 11l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z",
-  "backup": "M19 20H5V4h7v5h5v2h2V8l-6-6H5a2 2 0 00-2 2v16a2 2 0 002 2h14a2 2 0 002-2v-4h-2v4zM14 12l-4 4h3v4h2v-4h3l-4-4z",
-  "code": "M8.7 16.6L4.1 12l4.6-4.6L7.3 6l-6 6 6 6 1.4-1.4zm6.6 0l4.6-4.6-4.6-4.6L16.7 6l6 6-6 6-1.4-1.4z"
+  "edit": "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
 };
 
 function iconSvg(name) {
@@ -2058,122 +2053,13 @@ function switchRow(title, desc, key) {
   return row;
 }
 
-const SETTINGS_CATEGORIES = [
-  { id: "music", title: "Gerenciamento de músicas", description: "Adicione faixas, importe pastas e gerencie permissões", icon: "library_music", color: "music" },
-  { id: "appearance", title: "Aparência", description: "Temas, fontes e estilos visuais", icon: "palette", color: "appearance" },
-  { id: "playback", title: "Reprodução", description: "Controles de áudio, aleatório e repetição", icon: "music_note", color: "playback" },
-  { id: "behavior", title: "Comportamento", description: "Gestos e navegação entre páginas", icon: "touch_app", color: "behavior" },
-  { id: "ai", title: "Integração com IA (β)", description: "Provedores, chaves de API e modelos", icon: "auto_awesome", color: "ai", soon: true },
-  { id: "backup", title: "Backup e restauração", description: "Exporte e recupere seus dados pessoais", icon: "backup", color: "backup", soon: true },
-  { id: "developer", title: "Opções do desenvolvedor", description: "Recursos experimentais e depuração", icon: "code", color: "developer", soon: true }
-];
-
-function closeSettingsHub() {
-  const hub = $("settingsHub");
-  if (!hub || hub.hidden) return;
-  hub.hidden = true;
-  hub.setAttribute("aria-hidden", "true");
-  document.body.classList.remove("settings-open");
-}
-
-function openSettingsHub() {
-  closeSheet();
-  const hub = $("settingsHub");
-  const cards = $("settingsCards");
-  cards.replaceChildren();
-
-  SETTINGS_CATEGORIES.forEach(category => {
-    const card = el("button", "settings-card");
-    card.type = "button";
-    card.setAttribute("aria-label", category.title + ". " + category.description);
-
-    const icon = el("span", "settings-card-icon " + category.color);
-    icon.appendChild(el("span", "material-symbols-rounded", category.icon));
-
-    const copy = el("span", "settings-card-copy");
-    copy.append(el("strong", "", category.title), el("span", "", category.description));
-    card.append(icon, copy);
-
-    if (category.soon) card.appendChild(el("span", "settings-card-badge", "Em breve"));
-    card.onclick = () => openSettingsCategory(category.id);
-    cards.appendChild(card);
-  });
-
-  hub.hidden = false;
-  hub.setAttribute("aria-hidden", "false");
-  document.body.classList.add("settings-open");
-  hub.scrollTop = 0;
-}
-
-function openSettingsCategory(category) {
-  closeSettingsHub();
-
-  if (category === "music") {
-    openSheet("Gerenciamento de músicas", [
-      { icon: "add", label: "Adicionar músicas", run: openFilePicker },
-      { icon: "folder", label: "Importar uma pasta", run: importFolder },
-      { icon: "notifications", label: "Permissões", run: () => openPermissions(false) }
-    ]);
-    return;
-  }
-
-  if (category === "appearance") {
-    openSettings();
-    return;
-  }
-
-  if (category === "behavior") {
-    openBehaviorSettings();
-    return;
-  }
-
-  if (category === "playback") {
-    openSheet("Reprodução", [
-      {
-        icon: "play_arrow",
-        label: "Abrir controles do player",
-        run: () => current() ? openFullPlayer() : showToast("Toque uma música primeiro")
-      }
-    ]);
-    return;
-  }
-
-  const details = {
-    ai: ["Integração com IA (β)", "Esta categoria é apenas visual por enquanto. O app ainda não tem provedores de IA nem campos para chaves de API."],
-    backup: ["Backup e restauração", "A exportação e a restauração ainda não foram implementadas. Nenhum dado será exportado ou alterado por esta tela."],
-    developer: ["Opções do desenvolvedor", "As opções experimentais ainda não estão disponíveis nesta versão."]
-  };
-  const detail = details[category];
-  if (detail) showDialog({ title: detail[0], text: detail[1], confirmLabel: "Entendi" });
-}
-
-function openBehaviorSettings() {
-  closeSheet();
-  const scrim = el("div", "scrim");
-  const sheet = el("div", "sheet");
-  sheet.appendChild(el("div", "sheet-handle"));
-  sheet.appendChild(el("h3", "", "Comportamento"));
-  const sec = el("div", "set-sec");
-  sec.appendChild(el("div", "set-label", "Gestos da interface"));
-  sec.appendChild(switchRow("Deslizar entre páginas", "Arraste para o lado para trocar de página", "swipe"));
-  sec.appendChild(switchRow("Inverter o gesto", "Troca a direção do arrastar entre as páginas", "swipeInvert"));
-  sheet.appendChild(sec);
-  scrim.onclick = closeSheet;
-  document.body.append(scrim, sheet);
-  activeSheet = { scrim, sheet };
-  requestAnimationFrame(() => {
-    scrim.classList.add("show");
-    sheet.classList.add("show");
-  });
-}
-
 function openSettings() {
   closeSheet();
 
   const scrim = el("div", "scrim");
   const sheet = el("div", "sheet");
   sheet.appendChild(el("div", "sheet-handle"));
-  sheet.appendChild(el("h3", "", "Aparência"));
+  sheet.appendChild(el("h3", "", "Ajustes"));
 
   const sec = el("div", "set-sec");
   sec.appendChild(el("div", "set-label", "Cor do app"));
@@ -2219,6 +2105,12 @@ function openSettings() {
   sec.appendChild(
     switchRow("Capa em disco", "A capa vira um disco que gira enquanto toca", "disc")
   );
+  sec.appendChild(
+    switchRow("Deslizar entre páginas", "Arraste para o lado para trocar de página", "swipe")
+  );
+  sec.appendChild(
+    switchRow("Inverter o gesto", "Troca a direção do arrastar entre as páginas", "swipeInvert")
+  );
 
   const nameRow = el("button", "set-row");
   const nameText = el("div", "set-row-text");
@@ -2244,6 +2136,16 @@ function openSettings() {
   };
 
   sec.appendChild(nameRow);
+
+  const permRow = el("button", "set-row");
+  const permText = el("div", "set-row-text");
+  permText.append(
+    el("strong", "", "Permissões"),
+    el("span", "", "Notificações e pasta de músicas")
+  );
+  permRow.append(permText, el("span", "material-symbols-rounded", "notifications"));
+  permRow.onclick = () => openPermissions(false);
+  sec.appendChild(permRow);
 
   const fontSec = el("div", "set-sec");
   fontSec.appendChild(el("div", "set-label", "Fonte das letras"));
@@ -2756,11 +2658,7 @@ $("fontInput").addEventListener("change", () => {
   $("fontInput").value = "";
 });
 
-$("homeSettings").onclick = openSettingsHub;
-$("settingsBack").onclick = closeSettingsHub;
-document.addEventListener("keydown", event => {
-  if (event.key === "Escape") closeSettingsHub();
-});
+$("homeSettings").onclick = openSettings;
 
 /* ==========================================================
    Letras (.lrc)
