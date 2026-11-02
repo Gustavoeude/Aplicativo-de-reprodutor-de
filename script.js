@@ -1155,10 +1155,13 @@ async function addFile(file, automaticLyrics = "") {
     return { added: false, stored: true, lyricsAdded: false };
   }
 
+  const fileBaseName = file.name.replace(/\.[^/.]+$/, "").trim();
+  const nameParts = fileBaseName.split(/\s+-\s+/, 2);
+  const hasArtistInFileName = nameParts.length === 2 && nameParts[0].trim() && nameParts[1].trim();
   const song = {
     id: Date.now() + Math.random(),
-    name: file.name.replace(/\.[^/.]+$/, ""),
-    artist: "Arquivo local",
+    name: hasArtistInFileName ? nameParts[1].trim() : fileBaseName,
+    artist: hasArtistInFileName ? nameParts[0].trim() : "Arquivo local",
     album: "",
     sourceKey,
     favorite: false,
