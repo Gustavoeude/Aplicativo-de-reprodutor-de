@@ -2324,10 +2324,22 @@ audio.addEventListener("playing", () => {
 /* ---------- Media Session (notificação / tela de bloqueio) ---------- */
 // O plugin nativo mantém a sessão de mídia e o serviço Android ativos em segundo plano.
 // No navegador comum, continua usando a Media Session API padrão.
+let mediaSessionPlugin = null;
 function nativeMediaSession() {
-  return window.Capacitor && window.Capacitor.Plugins
-    ? window.Capacitor.Plugins.MediaSession
-    : null;
+  if (mediaSessionPlugin) return mediaSessionPlugin;
+  const cap = window.Capacitor;
+  if (!cap) return null;
+
+  // Capacitor 8 usa registerPlugin para obter a ponte JavaScript do plugin.
+  try {
+    if (typeof cap.registerPlugin === "function") {
+      mediaSessionPlugin = cap.registerPlugin("MediaSession");
+      return mediaSessionPlugin;
+    }
+  } catch (_) {}
+
+  // Compatibilidade com versões antigas do bridge.
+  return cap.Plugins && cap.Plugins.MediaSession ? cap.Plugins.MediaSession : null;
 }
 
 function callNativeMedia(method, options) {
