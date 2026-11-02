@@ -2053,13 +2053,122 @@ function switchRow(title, desc, key) {
   return row;
 }
 
+const SETTINGS_CATEGORIES = [
+  { id: "music", title: "Gerenciamento de músicas", description: "Adicione faixas, importe pastas e gerencie permissões", icon: "library_music", color: "music" },
+  { id: "appearance", title: "Aparência", description: "Temas, fontes e estilos visuais", icon: "light_mode", color: "appearance" },
+  { id: "playback", title: "Reprodução", description: "Controles de áudio, aleatório e repetição", icon: "music_note", color: "playback" },
+  { id: "behavior", title: "Comportamento", description: "Gestos e navegação entre páginas", icon: "restart_alt", color: "behavior" },
+  { id: "ai", title: "Integração com IA (β)", description: "Provedores, chaves de API e modelos", icon: "favorite", color: "ai", soon: true },
+  { id: "backup", title: "Backup e restauração", description: "Exporte e recupere seus dados pessoais", icon: "storage", color: "backup", soon: true },
+  { id: "developer", title: "Opções do desenvolvedor", description: "Recursos experimentais e depuração", icon: "settings", color: "developer", soon: true }
+];
+
+function closeSettingsHub() {
+  const hub = $("settingsHub");
+  if (!hub || hub.hidden) return;
+  hub.hidden = true;
+  hub.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("settings-open");
+}
+
+function openSettingsHub() {
+  closeSheet();
+  const hub = $("settingsHub");
+  const cards = $("settingsCards");
+  cards.replaceChildren();
+
+  SETTINGS_CATEGORIES.forEach(category => {
+    const card = el("button", "settings-card");
+    card.type = "button";
+    card.setAttribute("aria-label", category.title + ". " + category.description);
+
+    const icon = el("span", "settings-card-icon " + category.color);
+    icon.appendChild(el("span", "material-symbols-rounded", category.icon));
+
+    const copy = el("span", "settings-card-copy");
+    copy.append(el("strong", "", category.title), el("span", "", category.description));
+    card.append(icon, copy);
+
+    if (category.soon) card.appendChild(el("span", "settings-card-badge", "Em breve"));
+    card.onclick = () => openSettingsCategory(category.id);
+    cards.appendChild(card);
+  });
+
+  hub.hidden = false;
+  hub.setAttribute("aria-hidden", "false");
+  document.body.classList.add("settings-open");
+  hub.scrollTop = 0;
+}
+
+function openSettingsCategory(category) {
+  closeSettingsHub();
+
+  if (category === "music") {
+    openSheet("Gerenciamento de músicas", [
+      { icon: "add", label: "Adicionar músicas", run: openFilePicker },
+      { icon: "folder", label: "Importar uma pasta", run: importFolder },
+      { icon: "notifications", label: "Permissões", run: () => openPermissions(false) }
+    ]);
+    return;
+  }
+
+  if (category === "appearance") {
+    openSettings();
+    return;
+  }
+
+  if (category === "behavior") {
+    openBehaviorSettings();
+    return;
+  }
+
+  if (category === "playback") {
+    openSheet("Reprodução", [
+      {
+        icon: "play_arrow",
+        label: "Abrir controles do player",
+        run: () => current() ? openFullPlayer() : showToast("Toque uma música primeiro")
+      }
+    ]);
+    return;
+  }
+
+  const details = {
+    ai: ["Integração com IA (β)", "Esta categoria é apenas visual por enquanto. O app ainda não tem provedores de IA nem campos para chaves de API."],
+    backup: ["Backup e restauração", "A exportação e a restauração ainda não foram implementadas. Nenhum dado será exportado ou alterado por esta tela."],
+    developer: ["Opções do desenvolvedor", "As opções experimentais ainda não estão disponíveis nesta versão."]
+  };
+  const detail = details[category];
+  if (detail) showDialog({ title: detail[0], text: detail[1], confirmLabel: "Entendi" });
+}
+
+function openBehaviorSettings() {
+  closeSheet();
+  const scrim = el("div", "scrim");
+  const sheet = el("div", "sheet");
+  sheet.appendChild(el("div", "sheet-handle"));
+  sheet.appendChild(el("h3", "", "Comportamento"));
+  const sec = el("div", "set-sec");
+  sec.appendChild(el("div", "set-label", "Gestos da interface"));
+  sec.appendChild(switchRow("Deslizar entre páginas", "Arraste para o lado para trocar de página", "swipe"));
+  sec.appendChild(switchRow("Inverter o gesto", "Troca a direção do arrastar entre as páginas", "swipeInvert"));
+  sheet.appendChild(sec);
+  scrim.onclick = closeSheet;
+  document.body.append(scrim, sheet);
+  activeSheet = { scrim, sheet };
+  requestAnimationFrame(() => {
+    scrim.classList.add("show");
+    sheet.classList.add("show");
+  });
+}
+
 function openSettings() {
   closeSheet();
 
   const scrim = el("div", "scrim");
   const sheet = el("div", "sheet");
   sheet.appendChild(el("div", "sheet-handle"));
-  sheet.appendChild(el("h3", "", "Ajustes"));
+  sheet.appendChild(el("h3", "", "Aparência"));
 
   const sec = el("div", "set-sec");
   sec.appendChild(el("div", "set-label", "Cor do app"));
@@ -2105,12 +2214,6 @@ function openSettings() {
   sec.appendChild(
     switchRow("Capa em disco", "A capa vira um disco que gira enquanto toca", "disc")
   );
-  sec.appendChild(
-    switchRow("Deslizar entre páginas", "Arraste para o lado para trocar de página", "swipe")
-  );
-  sec.appendChild(
-    switchRow("Inverter o gesto", "Troca a direção do arrastar entre as páginas", "swipeInvert")
-  );
 
   const nameRow = el("button", "set-row");
   const nameText = el("div", "set-row-text");
@@ -2136,16 +2239,6 @@ function openSettings() {
   };
 
   sec.appendChild(nameRow);
-
-  const permRow = el("button", "set-row");
-  const permText = el("div", "set-row-text");
-  permText.append(
-    el("strong", "", "Permissões"),
-    el("span", "", "Notificações e pasta de músicas")
-  );
-  permRow.append(permText, el("span", "material-symbols-rounded", "notifications"));
-  permRow.onclick = () => openPermissions(false);
-  sec.appendChild(permRow);
 
   const fontSec = el("div", "set-sec");
   fontSec.appendChild(el("div", "set-label", "Fonte das letras"));
@@ -2658,7 +2751,11 @@ $("fontInput").addEventListener("change", () => {
   $("fontInput").value = "";
 });
 
-$("homeSettings").onclick = openSettings;
+$("homeSettings").onclick = openSettingsHub;
+$("settingsBack").onclick = closeSettingsHub;
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") closeSettingsHub();
+});
 
 /* ==========================================================
    Letras (.lrc)
