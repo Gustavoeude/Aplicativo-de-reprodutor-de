@@ -15,6 +15,7 @@ on:
       - "package-lock.json"
       - "capacitor.config.json"
       - "scripts/**"
+      - "native/**"
       - ".github/workflows/android-apk.yml"
 
 jobs:
@@ -43,6 +44,9 @@ jobs:
 
       - name: Gerar projeto Android com Capacitor
         run: npx cap add android
+
+      - name: Instalar o serviço de áudio em segundo plano
+        run: npm run patch:android
 
       - name: Sincronizar projeto Android
         run: npx cap sync android

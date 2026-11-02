@@ -2322,16 +2322,130 @@ audio.addEventListener("playing", () => {
 });
 
 /* ---------- Media Session (notificação / tela de bloqueio) ---------- */
-// A API Media Session atualiza os controles do WebView, mas não mantém o áudio
-// ativo quando o Android suspende o processo. A reprodução nativa em foreground
-// ainda precisa ser implementada; por isso, não ativamos o bridge antigo,
-// que causou encerramento do aplicativo em testes.
-function nativeMediaSession() {
+/* ----- Reprodução em segundo plano (só no app Android) -----
+   No APK, o plugin nativo "MusicaNative" mantém um serviço em primeiro plano com a
+   notificação de mídia. No navegador/PWA ele não existe e nada disso roda. */
+const MN = (() => {
+  try {
+    const C = window.Capacitor;
+    if (C && C.isNativePlatform && C.isNativePlatform()) {
+      return C.registerPlugin ? C.registerPlugin("MusicaNative") : C.Plugins && C.Plugins.MusicaNative;
+    }
+  } catch (_) {}
   return null;
+})();
+
+function nativeMediaSession() {
+  return MN;
 }
 
-function callNativeMedia() {
-  // Serviço Android nativo ainda não integrado.
+const nativeState = { title: "", artist: "", playing: false, duration: 0, rate: 1 };
+let nativeTimer = 0;
+let nativeCover = "";
+let nativeCoverDirty = false;
+let nativeAskedNotif = false;
+
+function sendNative() {
+  if (!MN) return;
+  const payload = {
+    title: nativeState.title,
+    artist: nativeState.artist,
+    playing: nativeState.playing,
+    position: audio.currentTime || 0,
+    duration: nativeState.duration,
+    rate: audio.playbackRate || 1
+  };
+  if (nativeCoverDirty) {
+    payload.cover = nativeCover;
+    nativeCoverDirty = false;
+  }
+  try {
+    const r = MN.update(payload);
+    if (r && r.catch) r.catch(() => {});
+  } catch (_) {}
+}
+
+// capa pequena (JPEG 256px em base64) para a notificação
+function nativeCoverFor(song) {
+  if (!song.cover) return Promise.resolve("");
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const size = 256;
+        const c = document.createElement("canvas");
+        c.width = c.height = size;
+        const x = c.getContext("2d");
+        const k = Math.max(size / img.width, size / img.height);
+        x.drawImage(img, (size - img.width * k) / 2, (size - img.height * k) / 2, img.width * k, img.height * k);
+        resolve(c.toDataURL("image/jpeg", 0.8).split(",")[1] || "");
+      } catch (_) {
+        resolve("");
+      }
+    };
+    img.onerror = () => resolve("");
+    img.src = song.cover;
+  });
+}
+
+function callNativeMedia(method, payload) {
+  if (!MN) return;
+
+  if (method === "setMetadata") {
+    nativeState.title = payload.title;
+    nativeState.artist = payload.artist;
+    nativeState.duration = 0;
+    nativeCover = "";
+    nativeCoverDirty = true;
+    const song = current();
+    if (song) {
+      const id = song.id;
+      nativeCoverFor(song).then(b64 => {
+        if (currentId !== id) return;
+        nativeCover = b64;
+        nativeCoverDirty = true;
+        sendNative();
+      });
+    }
+  } else if (method === "setPlaybackState") {
+    nativeState.playing = payload.playbackState === "playing";
+    if (nativeState.playing && !nativeAskedNotif) {
+      nativeAskedNotif = true;
+      try { MN.requestNotifications(); } catch (_) {}
+    }
+  } else if (method === "setPositionState") {
+    nativeState.duration = payload.duration;
+  }
+
+  clearTimeout(nativeTimer);
+  nativeTimer = setTimeout(sendNative, 80);
+}
+
+// botões da notificação, da tela de bloqueio e dos fones
+if (MN && MN.addListener) {
+  MN.addListener("action", e => {
+    switch (e && e.action) {
+      case "play":
+        if (currentId === null) togglePlay();
+        else playAudio();
+        break;
+      case "pause":
+        audio.pause();
+        break;
+      case "next":
+        playNext();
+        break;
+      case "previous":
+        playPrev();
+        break;
+      case "seek":
+        if (typeof e.position === "number") {
+          audio.currentTime = e.position;
+          updatePositionState();
+        }
+        break;
+    }
+  });
 }
 
 function updateMediaSession() {
