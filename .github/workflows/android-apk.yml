@@ -51,13 +51,39 @@ jobs:
       - name: Sincronizar projeto Android
         run: npx cap sync android
 
-      - name: Compilar APK de teste
+      - name: Compilar o APK
+        env:
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: |
+          if [ -n "$KS_PASS" ]; then
+            ./gradlew assembleRelease
+          else
+            echo "Sem KEYSTORE_PASSWORD: compilando APK de teste (debug)."
+            ./gradlew assembleDebug
+          fi
 
-      - name: Disponibilizar APK
+      - name: Assinar o APK
+        env:
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          mkdir -p out
+          if [ -z "$KS_PASS" ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk out/Musica-debug.apk
+            exit 0
+          fi
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:KS_PASS \
+            -in native/signing/musica.jks.enc -out "$RUNNER_TEMP/musica.jks"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/zipalign" -p -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/musica.jks" --ks-key-alias musica \
+            --ks-pass env:KS_PASS --key-pass env:KS_PASS --out out/Musica.apk "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" verify --print-certs out/Musica.apk | head -3
+          rm -f "$RUNNER_TEMP/musica.jks"
+
+      - name: Disponibilizar o APK
         uses: actions/upload-artifact@v4
         with:
-          name: reprodutor-musical-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: Musica-apk
+          path: out/*.apk
           if-no-files-found: error
