@@ -7,6 +7,21 @@
    Ícones embutidos (SVG) — não dependem de internet nem de fonte
    ========================================================== */
 const ICONS = {
+  "arrow_back": "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
+  "info": "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z",
+  "palette": "M12 3a9 9 0 0 0 0 18c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z",
+  "equalizer": "M10 20h4V4h-4v16zm-6 0h4v-8H4v8zM16 9v11h4V9h-4z",
+  "speed": "M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z",
+  "timer": "M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.962 8.962 0 0 0 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9a8.994 8.994 0 0 0 7.03-14.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z",
+  "touch_app": "M9 11.24V7.5C9 6.12 10.12 5 11.5 5S14 6.12 14 7.5v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63l-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72c-.08-.01-.15-.03-.24-.03-.31 0-.59.13-.79.33l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z",
+  "backup": "M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z",
+  "memory": "M15 9H9v6h6V9zm-2 4h-2v-2h2v2zm8-2V9h-2V7c0-1.1-.9-2-2-2h-2V3h-2v2h-2V3H9v2H7c-1.1 0-2 .9-2 2v2H3v2h2v2H3v2h2v2c0 1.1.9 2 2 2h2v2h2v-2h2v2h2v-2h2c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2zm-4 6H7V7h10v10z",
+  "file_download": "M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z",
+  "sort": "M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z",
+  "refresh": "M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z",
+  "close": "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+  "chevron_right": "M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z",
+  "volume_up": "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z",
   "settings": "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z",
   "music_note": "M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z",
   "play_arrow": "M8 5v14l11-7z",
@@ -224,7 +239,7 @@ let homeMain = null;
 let lrcTargetId = null;
 let seed = { h: 215, s: 0.8 };
 let settings = Object.assign(
-  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false, font: "roboto" },
+  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false, font: "roboto", sort: "added", speed: 1, resume: true, fade: false, haptics: false, dblFav: true, wake: false, eq: { on: false, preset: "flat", gains: [0, 0, 0, 0, 0] } },
   lsGet("settings", {})
 );
 if (!settings.shapes || typeof settings.shapes !== "object") settings.shapes = {};
@@ -1126,14 +1141,25 @@ function renderSearch() {
   results.forEach(song => container.appendChild(createSongItem(song, ids)));
 }
 
+function sortSongs(list) {
+  const how = settings.sort || "added";
+  if (how === "added") return list;
+  const cmp = (a, b) => String(a || "").localeCompare(String(b || ""), "pt-BR", { sensitivity: "base" });
+  if (how === "name") list.sort((a, b) => cmp(a.name, b.name));
+  else if (how === "artist") list.sort((a, b) => cmp(a.artist, b.artist) || cmp(a.name, b.name));
+  else if (how === "plays") list.sort((a, b) => b.playCount - a.playCount);
+  else if (how === "recent") list.sort((a, b) => b.lastPlayed - a.lastPlayed);
+  return list;
+}
+
 function librarySongs() {
-  if (libraryFilter === "all") return songs.slice();
-  if (libraryFilter === "fav") return songs.filter(s => s.favorite);
+  if (libraryFilter === "all") return sortSongs(songs.slice());
+  if (libraryFilter === "fav") return sortSongs(songs.filter(s => s.favorite));
 
   const p = playlists.find(x => x.id === libraryFilter);
   if (!p) {
     libraryFilter = "all";
-    return songs.slice();
+    return sortSongs(songs.slice());
   }
 
   return p.songIds.map(getSong).filter(Boolean);
@@ -2053,217 +2079,6 @@ function switchRow(title, desc, key) {
   return row;
 }
 
-function openSettings() {
-  closeSheet();
-
-  const scrim = el("div", "scrim");
-  const sheet = el("div", "sheet");
-  sheet.appendChild(el("div", "sheet-handle"));
-  sheet.appendChild(el("h3", "", "Ajustes"));
-
-  const sec = el("div", "set-sec");
-  sec.appendChild(el("div", "set-label", "Cor do app"));
-
-  const swatches = el("div", "swatches");
-  const hint = el("div", "set-hint", "");
-  const buttons = [];
-
-  const refresh = () => {
-    buttons.forEach(({ b, a }) => {
-      const on = settings.accent === a.id;
-      b.classList.toggle("on", on);
-      b.replaceChildren();
-      if (on) b.appendChild(el("span", "material-symbols-rounded", "check"));
-    });
-
-    const cur = ACCENTS.find(a => a.id === settings.accent);
-    hint.textContent = "Cor atual: " + (cur ? cur.name : "Da capa da música");
-  };
-
-  ACCENTS.forEach(a => {
-    const b = el("button", "swatch" + (a.id === "auto" ? " auto" : ""));
-    b.setAttribute("aria-label", a.name);
-    if (a.id !== "auto") b.style.background = "hsl(" + a.id + " 70% 62%)";
-
-    b.onclick = () => {
-      settings.accent = a.id;
-      saveSettings();
-      refresh();
-      updateColor();
-    };
-
-    buttons.push({ b, a });
-    swatches.appendChild(b);
-  });
-
-  refresh();
-  sec.append(swatches, hint);
-
-  sec.appendChild(
-    switchRow("Preto total", "Fundo preto puro (economiza bateria em tela AMOLED)", "amoled")
-  );
-  sec.appendChild(
-    switchRow("Capa em disco", "A capa vira um disco que gira enquanto toca", "disc")
-  );
-  sec.appendChild(
-    switchRow("Deslizar entre páginas", "Arraste para o lado para trocar de página", "swipe")
-  );
-  sec.appendChild(
-    switchRow("Inverter o gesto", "Troca a direção do arrastar entre as páginas", "swipeInvert")
-  );
-
-  const nameRow = el("button", "set-row");
-  const nameText = el("div", "set-row-text");
-  nameText.append(
-    el("strong", "", "Seu nome"),
-    el("span", "", settings.name || "Aparece na saudação da tela inicial")
-  );
-  nameRow.append(nameText, el("span", "material-symbols-rounded", "edit"));
-
-  nameRow.onclick = async () => {
-    closeSheet();
-
-    const n = await showDialog({
-      title: "Seu nome",
-      input: { value: settings.name, placeholder: "Como você quer ser chamado?" },
-      confirmLabel: "Salvar"
-    });
-
-    if (n === null) return;
-    settings.name = n;
-    saveSettings();
-    renderGreeting();
-  };
-
-  sec.appendChild(nameRow);
-
-  const permRow = el("button", "set-row");
-  const permText = el("div", "set-row-text");
-  permText.append(
-    el("strong", "", "Permissões"),
-    el("span", "", "Notificações e pasta de músicas")
-  );
-  permRow.append(permText, el("span", "material-symbols-rounded", "notifications"));
-  permRow.onclick = () => openPermissions(false);
-  sec.appendChild(permRow);
-
-  const fontSec = el("div", "set-sec");
-  fontSec.appendChild(el("div", "set-label", "Fonte das letras"));
-
-  const fontRows = [];
-  const paintFonts = () => {
-    fontRows.forEach(({ id, check }) => {
-      check.replaceChildren();
-      if (settings.font === id) check.appendChild(el("span", "material-symbols-rounded", "check"));
-    });
-  };
-
-  const fontRow = (id, name, note, family, deletable) => {
-    const row = el("div", "set-row font-row");
-    const main = el("button", "font-main");
-    const text = el("div", "set-row-text");
-    const title = el("strong", "", name);
-    title.style.fontFamily = family;
-    text.append(title, el("span", "", note));
-    const check = el("span", "font-check");
-    main.append(text, check);
-    main.onclick = () => {
-      settings.font = id;
-      saveSettings();
-      applyFont();
-      paintFonts();
-    };
-    row.appendChild(main);
-
-    if (deletable) {
-      const del = el("button", "font-del");
-      del.setAttribute("aria-label", "Apagar fonte");
-      del.appendChild(el("span", "material-symbols-rounded", "delete"));
-      del.onclick = async () => {
-        const ok = await showDialog({
-          title: "Apagar essa fonte?",
-          text: "“" + name + "” será removida do app.",
-          confirmLabel: "Apagar",
-          danger: true
-        });
-        if (!ok) return;
-        customFonts = customFonts.filter(f => f.id !== id);
-        fontDbDelete(id);
-        if (settings.font === id) {
-          settings.font = "roboto";
-          saveSettings();
-          applyFont();
-        }
-        openSettings();
-      };
-      row.appendChild(del);
-    }
-
-    fontRows.push({ id, check });
-    fontSec.appendChild(row);
-  };
-
-  GOOGLE_FONTS.forEach(f => {
-    ensureGoogleFont(f);
-    fontRow(f.id, f.name, f.note, f.id === "system" ? "system-ui" : '"' + f.family + '", system-ui, sans-serif', false);
-  });
-  customFonts.forEach(f => fontRow(f.id, f.name, "Importada por você", '"' + f.family + '", system-ui, sans-serif', true));
-
-  const importRow = el("button", "set-row");
-  const importText = el("div", "set-row-text");
-  importText.append(
-    el("strong", "", "Importar fonte"),
-    el("span", "", "Escolha um arquivo .ttf, .otf ou .woff2 do seu celular")
-  );
-  importRow.append(importText, el("span", "material-symbols-rounded", "upload_file"));
-  importRow.onclick = () => $("fontInput").click();
-  fontSec.appendChild(importRow);
-  paintFonts();
-
-  const shapeSec = el("div", "set-sec");
-  shapeSec.appendChild(el("div", "set-label", "Formas das bolinhas"));
-
-  Object.keys(BUBBLES).forEach(id => {
-    const row = el("button", "set-row");
-    const cur = settings.shapes[id] || "default";
-    const curName = (SHAPES.find(s => s.id === cur) || SHAPES[0]).name;
-    const txt = el("div", "set-row-text");
-    txt.append(el("strong", "", BUBBLES[id]), el("span", "", curName));
-    const prev = el("span", "shape-prev mini shape-" + (cur !== "default" ? cur : DEFAULT_PREV[id]));
-    row.append(txt, prev);
-    row.onclick = () => openShapePicker(id, true);
-    shapeSec.appendChild(row);
-  });
-
-  const resetRow = el("button", "set-row");
-  const resetText = el("div", "set-row-text");
-  resetText.append(
-    el("strong", "", "Restaurar formas"),
-    el("span", "", "Volta todas as bolinhas ao formato padrão")
-  );
-  resetRow.append(resetText, el("span", "material-symbols-rounded", "restart_alt"));
-  resetRow.onclick = () => {
-    settings.shapes = {};
-    saveSettings();
-    applyShapes();
-    closeSheet();
-  };
-  shapeSec.appendChild(resetRow);
-  sheet.appendChild(sec);
-  sheet.appendChild(fontSec);
-  sheet.appendChild(shapeSec);
-
-  scrim.onclick = closeSheet;
-  document.body.append(scrim, sheet);
-  activeSheet = { scrim, sheet };
-
-  requestAnimationFrame(() => {
-    scrim.classList.add("show");
-    sheet.classList.add("show");
-  });
-}
-
-
 /* ==========================================================
    Formas das bolinhas (segure para personalizar)
    ========================================================== */
@@ -2377,7 +2192,7 @@ function openShapePicker(id, backToSettings) {
       saveSettings();
       applyShapes();
       closeSheet();
-      if (backToSettings) setTimeout(openSettings, 300);
+      if (backToSettings && window.refreshSettingsPage) setTimeout(refreshSettingsPage, 300);
     };
 
     grid.appendChild(b);
@@ -2650,6 +2465,7 @@ async function importFontFile(file) {
   saveSettings();
   applyFont();
   showToast("Fonte “" + rec.name + "” adicionada");
+  if (window.refreshSettingsPage) refreshSettingsPage();
 }
 
 $("fontInput").addEventListener("change", () => {
@@ -2658,7 +2474,7 @@ $("fontInput").addEventListener("change", () => {
   $("fontInput").value = "";
 });
 
-$("homeSettings").onclick = openSettings;
+$("homeSettings").onclick = () => openSettings();
 
 /* ==========================================================
    Letras (.lrc)
