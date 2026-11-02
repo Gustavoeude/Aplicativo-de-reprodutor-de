@@ -260,8 +260,8 @@ function toRecord(song) {
 }
 
 function inferLocalArtistFromFilename(file) {
-  const baseName = String(file && file.name || "").replace(/\\.[^/.]+$/, "").trim();
-  const parts = baseName.split(/\\s+-\\s+/, 2);
+  const baseName = String(file && file.name || "").replace(/\.[^/.]+$/, "").trim();
+  const parts = baseName.split(/\s+-\s+/, 2);
   if (parts.length !== 2) return null;
   const artist = parts[0].trim();
   const title = parts[1].trim();
