@@ -1157,7 +1157,7 @@ async function fetchOnlineCover(song) {
     const response = await fetch("https://itunes.apple.com/search?term=" + encodeURIComponent(query) + "&entity=song&limit=8");
     if (!response.ok) return false;
     const data = await response.json();
-    const normalize = value => String(value || "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const normalize = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     const title = normalize(song.name);
     const artist = normalize(song.artist);
     const matches = (data.results || []).filter(item =>
