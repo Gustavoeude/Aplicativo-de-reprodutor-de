@@ -1,0 +1,6 @@
+{
+  "appId": "br.com.gustavoeude.reprodutormusical",
+  "appName": "Reprodutor Musical",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
