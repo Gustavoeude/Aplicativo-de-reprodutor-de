@@ -2445,10 +2445,6 @@ function initMediaSessionHandlers() {
     if (hasWeb) {
       try { navigator.mediaSession.setActionHandler(name, handlers[name]); } catch (_) {}
     }
-    callNativeMedia("setActionHandler", {
-      action: name,
-      // O callback é passado separadamente abaixo, conforme a API do plugin.
-    });
     const plugin = nativeMediaSession();
     if (plugin && typeof plugin.setActionHandler === "function") {
       try {
