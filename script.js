@@ -1152,25 +1152,46 @@ function requestOnlineLyrics(song, force = false) {
 
 async function fetchOnlineCover(song) {
   if (!song || song.coverBlob || !song.name) return false;
-  const query = [song.name, song.artist].filter(Boolean).join(" ");
+
+  const normalize = value => String(value || "")
+    .normalize("NFD")
+    .replace(/[\\u0300-\\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const title = normalize(song.name);
+  const artist = normalize(song.artist);
+  const album = normalize(song.album);
+  const queries = [...new Set([
+    [song.name, song.artist].filter(Boolean).join(" "),
+    [song.name, song.album].filter(Boolean).join(" "),
+    song.name
+  ].filter(Boolean))];
+
   try {
-    const response = await fetch("https://itunes.apple.com/search?term=" + encodeURIComponent(query) + "&entity=song&limit=8");
-    if (!response.ok) return false;
-    const data = await response.json();
-    const normalize = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-    const title = normalize(song.name);
-    const artist = normalize(song.artist);
-    const matches = (data.results || []).filter(item =>
-      normalize(item.trackName) === title &&
-      (!artist || normalize(item.artistName).includes(artist) || artist.includes(normalize(item.artistName)))
-    );
-    const match = matches[0] || (data.results || []).find(item => normalize(item.trackName) === title);
+    let match = null;
+    for (const query of queries) {
+      const response = await fetch("https://itunes.apple.com/search?term=" + encodeURIComponent(query) + "&entity=song&limit=25");
+      if (!response.ok) continue;
+      const data = await response.json();
+      const results = data.results || [];
+      const exact = results.filter(item => normalize(item.trackName) === title);
+      match = exact.find(item => {
+        const candidateArtist = normalize(item.artistName);
+        const candidateAlbum = normalize(item.collectionName);
+        return (!artist || candidateArtist === artist || candidateArtist.includes(artist) || artist.includes(candidateArtist)) &&
+          (!album || !candidateAlbum || candidateAlbum === album || candidateAlbum.includes(album) || album.includes(candidateAlbum));
+      }) || exact[0] || null;
+      if (match) break;
+    }
+
     if (!match || !match.artworkUrl100) return false;
     const imageUrl = match.artworkUrl100.replace(/100x100bb/, "600x600bb");
     const imageResponse = await fetch(imageUrl);
     if (!imageResponse.ok) return false;
     const blob = await imageResponse.blob();
     if (!blob.type.startsWith("image/")) return false;
+
     song.coverBlob = blob;
     if (song.cover) URL.revokeObjectURL(song.cover);
     song.cover = URL.createObjectURL(blob);
@@ -1182,7 +1203,6 @@ async function fetchOnlineCover(song) {
     return false;
   }
 }
-
 function pickCoverFor(songId) {
   const song = getSong(songId);
   if (!song) return;
@@ -1206,6 +1226,7 @@ async function addFile(file, automaticLyrics = "") {
   const sourceKey = fileIdentity(file);
   const duplicate = songs.find(s => s.file && (s.sourceKey || fileIdentity(s.file)) === sourceKey);
   if (duplicate) {
+    if (!duplicate.coverBlob) fetchOnlineCover(duplicate);
     if (!duplicate.lyrics && automaticLyrics) {
       duplicate.lyrics = automaticLyrics;
       duplicate.lyricsSource = "lrc";
@@ -1523,15 +1544,7 @@ function openSongMenu(song, opts = {}) {
   }
 
   actions.push({
-    icon: "image_search",
-    label: "Buscar capa na internet",
-    run: () => fetchOnlineCover(song).then(found => {
-      if (!found) showToast("Não encontrei uma capa para esta música.");
-    })
-  });
-
-  actions.push({
-    icon: "add_photo_alternate",
+    icon: "photo_library",
     label: song.coverBlob ? "Trocar capa pela galeria" : "Escolher capa da galeria",
     run: () => pickCoverFor(song.id)
   });
