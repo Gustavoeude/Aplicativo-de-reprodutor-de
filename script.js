@@ -2324,31 +2324,15 @@ audio.addEventListener("playing", () => {
 /* ---------- Media Session (notificação / tela de bloqueio) ---------- */
 // O plugin nativo mantém a sessão de mídia e o serviço Android ativos em segundo plano.
 // No navegador comum, continua usando a Media Session API padrão.
-let mediaSessionPlugin = null;
+// O bridge nativo do plugin MediaSession fica temporariamente desativado
+// para isolar uma falha que fecha o app ao iniciar a reprodução.
+// A Media Session padrão do navegador continua ativa no Android WebView.
 function nativeMediaSession() {
-  if (mediaSessionPlugin) return mediaSessionPlugin;
-  const cap = window.Capacitor;
-  if (!cap) return null;
-
-  // Capacitor 8 usa registerPlugin para obter a ponte JavaScript do plugin.
-  try {
-    if (typeof cap.registerPlugin === "function") {
-      mediaSessionPlugin = cap.registerPlugin("MediaSession");
-      return mediaSessionPlugin;
-    }
-  } catch (_) {}
-
-  // Compatibilidade com versões antigas do bridge.
-  return cap.Plugins && cap.Plugins.MediaSession ? cap.Plugins.MediaSession : null;
+  return null;
 }
 
-function callNativeMedia(method, options) {
-  const plugin = nativeMediaSession();
-  if (!plugin || typeof plugin[method] !== "function") return;
-  try {
-    const result = plugin[method](options);
-    if (result && typeof result.catch === "function") result.catch(() => {});
-  } catch (_) {}
+function callNativeMedia() {
+  // Sem chamadas nativas até validar a reprodução no dispositivo.
 }
 
 function updateMediaSession() {
@@ -2424,8 +2408,7 @@ function notifyPlayRejected(error) {
 
 function initMediaSessionHandlers() {
   const hasWeb = "mediaSession" in navigator;
-  const hasNative = !!nativeMediaSession();
-  if (!hasWeb && !hasNative) return;
+  if (!hasWeb) return;
 
   const handlers = {
     play: () => {
@@ -2456,13 +2439,6 @@ function initMediaSessionHandlers() {
   Object.keys(handlers).forEach(name => {
     if (hasWeb) {
       try { navigator.mediaSession.setActionHandler(name, handlers[name]); } catch (_) {}
-    }
-    const plugin = nativeMediaSession();
-    if (plugin && typeof plugin.setActionHandler === "function") {
-      try {
-        const result = plugin.setActionHandler({ action: name }, handlers[name]);
-        if (result && result.catch) result.catch(() => {});
-      } catch (_) {}
     }
   });
 }
