@@ -2322,17 +2322,16 @@ audio.addEventListener("playing", () => {
 });
 
 /* ---------- Media Session (notificação / tela de bloqueio) ---------- */
-// O plugin nativo mantém a sessão de mídia e o serviço Android ativos em segundo plano.
-// No navegador comum, continua usando a Media Session API padrão.
-// O bridge nativo do plugin MediaSession fica temporariamente desativado
-// para isolar uma falha que fecha o app ao iniciar a reprodução.
-// A Media Session padrão do navegador continua ativa no Android WebView.
+// A API Media Session atualiza os controles do WebView, mas não mantém o áudio
+// ativo quando o Android suspende o processo. A reprodução nativa em foreground
+// ainda precisa ser implementada; por isso, não ativamos o bridge antigo,
+// que causou encerramento do aplicativo em testes.
 function nativeMediaSession() {
   return null;
 }
 
 function callNativeMedia() {
-  // Sem chamadas nativas até validar a reprodução no dispositivo.
+  // Serviço Android nativo ainda não integrado.
 }
 
 function updateMediaSession() {
