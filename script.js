@@ -1523,19 +1523,18 @@ function openSongMenu(song, opts = {}) {
   }
 
   actions.push({
-    icon: "image",
-    label: song.coverBlob ? "Trocar capa" : "Buscar capa na internet",
-    run: () => song.coverBlob ? pickCoverFor(song.id) : fetchOnlineCover(song).then(found => {
-      if (!found) showToast("Não encontrei uma capa; você pode escolher uma imagem.");
+    icon: "image_search",
+    label: "Buscar capa na internet",
+    run: () => fetchOnlineCover(song).then(found => {
+      if (!found) showToast("Não encontrei uma capa para esta música.");
     })
   });
-  if (!song.coverBlob) {
-    actions.push({
-      icon: "add_photo_alternate",
-      label: "Escolher capa da galeria",
-      run: () => pickCoverFor(song.id)
-    });
-  }
+
+  actions.push({
+    icon: "add_photo_alternate",
+    label: song.coverBlob ? "Trocar capa pela galeria" : "Escolher capa da galeria",
+    run: () => pickCoverFor(song.id)
+  });
 
   actions.push({
     icon: "lyrics",
