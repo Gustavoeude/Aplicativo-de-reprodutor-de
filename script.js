@@ -259,6 +259,16 @@ function toRecord(song) {
   };
 }
 
+function inferLocalArtistFromFilename(file) {
+  const baseName = String(file && file.name || "").replace(/\\.[^/.]+$/, "").trim();
+  const parts = baseName.split(/\\s+-\\s+/, 2);
+  if (parts.length !== 2) return null;
+  const artist = parts[0].trim();
+  const title = parts[1].trim();
+  if (!artist || !title) return null;
+  return { artist, title };
+}
+
 function makeSong(r) {
   return {
     id: r.id,
@@ -3351,9 +3361,23 @@ async function loadSongs() {
   const records = await dbGetAll();
   records.sort((a, b) => a.id - b.id);
 
-  records.forEach(r => {
-    if (r && r.file) songs.push(makeSong(r));
-  });
+  for (const r of records) {
+    if (!r || !r.file) continue;
+    const song = makeSong(r);
+    const genericArtist = !song.artist || ["arquivo local", "artista desconhecido", "unknown"].includes(String(song.artist).trim().toLowerCase());
+    if (genericArtist) {
+      const inferred = inferLocalArtistFromFilename(song.file);
+      if (inferred) {
+        song.artist = inferred.artist;
+        // Atualiza o título apenas quando ele ainda corresponde ao nome completo do arquivo.
+        const savedTitle = String(song.name || "").trim();
+        const fileTitle = String(song.file.name || "").replace(/\\.[^/.]+$/, "").trim();
+        if (!savedTitle || savedTitle === fileTitle) song.name = inferred.title;
+        await dbPut(toRecord(song));
+      }
+    }
+    songs.push(song);
+  }
 
   const valid = new Set(allIds());
   let changed = false;
