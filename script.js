@@ -103,9 +103,16 @@ function fmt(t) {
 }
 
 function lsGet(key, fallback) {
+  let value;
   try {
-    const v = localStorage.getItem(key);
-    return v ? JSON.parse(v) : fallback;
+    value = localStorage.getItem(key);
+  } catch {
+    reportStorageIssue();
+    return fallback;
+  }
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
   } catch {
     return fallback;
   }
@@ -114,7 +121,9 @@ function lsGet(key, fallback) {
 function lsSet(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
+  } catch {
+    reportStorageIssue();
+  }
 }
 
 
@@ -123,6 +132,13 @@ function lsSet(key, value) {
    ========================================================== */
 const DB_NAME = "musica-db";
 const STORE = "songs";
+let storageIssueReported = false;
+
+function reportStorageIssue() {
+  if (storageIssueReported) return;
+  storageIssueReported = true;
+  setTimeout(() => showToast("Não foi possível acessar o armazenamento local. Confira as permissões e o espaço disponível."), 0);
+}
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -137,8 +153,12 @@ function openDB() {
 
 const dbReady = (() => {
   try {
-    return openDB().catch(() => null);
+    return openDB().catch(() => {
+      reportStorageIssue();
+      return null;
+    });
   } catch {
+    reportStorageIssue();
     return Promise.resolve(null);
   }
 })();
@@ -149,23 +169,72 @@ if (navigator.storage && navigator.storage.persist) {
 
 async function dbPut(record) {
   const db = await dbReady;
-  if (!db) return;
-  db.transaction(STORE, "readwrite").objectStore(STORE).put(record);
+  if (!db) return false;
+  return new Promise(resolve => {
+    let tx;
+    try {
+      tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).put(record);
+    } catch {
+      reportStorageIssue();
+      resolve(false);
+      return;
+    }
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = tx.onabort = () => {
+      reportStorageIssue();
+      resolve(false);
+    };
+  });
 }
 
 async function dbDelete(id) {
   const db = await dbReady;
-  if (!db) return;
-  db.transaction(STORE, "readwrite").objectStore(STORE).delete(id);
+  if (!db) return false;
+  return new Promise(resolve => {
+    let tx;
+    try {
+      tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).delete(id);
+    } catch {
+      reportStorageIssue();
+      resolve(false);
+      return;
+    }
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = tx.onabort = () => {
+      reportStorageIssue();
+      resolve(false);
+    };
+  });
 }
 
 async function dbGetAll() {
   const db = await dbReady;
   if (!db) return [];
   return new Promise(resolve => {
-    const req = db.transaction(STORE).objectStore(STORE).getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => resolve([]);
+    let settled = false;
+    const finish = records => {
+      if (settled) return;
+      settled = true;
+      resolve(records);
+    };
+    try {
+      const tx = db.transaction(STORE);
+      const req = tx.objectStore(STORE).getAll();
+      req.onsuccess = () => finish(req.result || []);
+      req.onerror = () => {
+        reportStorageIssue();
+        finish([]);
+      };
+      tx.onerror = tx.onabort = () => {
+        reportStorageIssue();
+        finish([]);
+      };
+    } catch {
+      reportStorageIssue();
+      finish([]);
+    }
   });
 }
 
@@ -174,6 +243,7 @@ function toRecord(song) {
     id: song.id,
     name: song.name,
     artist: song.artist,
+    sourceKey: song.sourceKey || fileIdentity(song.file),
     favorite: song.favorite,
     file: song.file,
     coverBlob: song.coverBlob || null,
@@ -188,6 +258,7 @@ function makeSong(r) {
     id: r.id,
     name: r.name,
     artist: r.artist,
+    sourceKey: r.sourceKey || fileIdentity(r.file),
     favorite: !!r.favorite,
     file: r.file,
     url: URL.createObjectURL(r.file),
@@ -641,21 +712,88 @@ function showToast(message) {
 }
 
 let activeSheet = null;
+let activeDialog = null;
+let modalTitleSerial = 0;
+
+function activeModalElement() {
+  if (activeDialog) return activeDialog.dlg;
+  if (activeSheet) return activeSheet.sheet;
+  return fpOpen ? $("fullPlayer") : null;
+}
+
+document.addEventListener("keydown", e => {
+  const modal = activeModalElement();
+  if (!modal) return;
+
+  if (e.key === "Escape") {
+    e.preventDefault();
+    if (activeDialog) activeDialog.done(null);
+    else if (activeSheet) closeSheet();
+    else if (fpOpen) closeFullPlayer();
+    return;
+  }
+
+  if (e.key !== "Tab") return;
+  const focusable = Array.from(modal.querySelectorAll(
+    'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+  )).filter(node => node.getAttribute("aria-hidden") !== "true" && node.getClientRects().length);
+  if (!focusable.length) {
+    e.preventDefault();
+    modal.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && (document.activeElement === first || document.activeElement === modal)) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+});
 
 function closeSheet() {
   if (!activeSheet) return;
-  const { scrim, sheet } = activeSheet;
+  const { scrim, sheet, returnFocus } = activeSheet;
   activeSheet = null;
 
   scrim.classList.remove("show");
   sheet.classList.remove("show");
+  sheet.setAttribute("aria-hidden", "true");
+  if (returnFocus && returnFocus.isConnected) returnFocus.focus();
   setTimeout(() => {
     scrim.remove();
     sheet.remove();
   }, 260);
 }
 
+function presentSheet(scrim, sheet, returnFocus) {
+  const title = sheet.querySelector("h3");
+  sheet.setAttribute("role", "dialog");
+  sheet.setAttribute("aria-modal", "true");
+  sheet.setAttribute("tabindex", "-1");
+  if (title) {
+    title.id = "sheet-title-" + (++modalTitleSerial);
+    sheet.setAttribute("aria-labelledby", title.id);
+  } else {
+    sheet.setAttribute("aria-label", "Opções");
+  }
+  scrim.setAttribute("aria-hidden", "true");
+  document.body.append(scrim, sheet);
+  activeSheet = { scrim, sheet, returnFocus };
+
+  requestAnimationFrame(() => {
+    scrim.classList.add("show");
+    sheet.classList.add("show");
+    const first = sheet.querySelector('button:not([disabled]), input:not([disabled])');
+    (first || sheet).focus();
+  });
+}
+
 function openSheet(title, actions) {
+  const returnFocus = activeSheet ? activeSheet.returnFocus : document.activeElement;
   closeSheet();
 
   const scrim = el("div", "scrim");
@@ -675,20 +813,22 @@ function openSheet(title, actions) {
   });
 
   scrim.onclick = closeSheet;
-  document.body.append(scrim, sheet);
-  activeSheet = { scrim, sheet };
-
-  requestAnimationFrame(() => {
-    scrim.classList.add("show");
-    sheet.classList.add("show");
-  });
+  presentSheet(scrim, sheet, returnFocus);
 }
 
 function showDialog({ title, text, input, confirmLabel = "OK", danger = false }) {
   return new Promise(resolve => {
+    const returnFocus = document.activeElement;
     const scrim = el("div", "scrim");
     const dlg = el("div", "dialog");
-    dlg.appendChild(el("h3", "", title));
+    const heading = el("h3", "", title);
+    heading.id = "dialog-title-" + (++modalTitleSerial);
+    dlg.setAttribute("role", "dialog");
+    dlg.setAttribute("aria-modal", "true");
+    dlg.setAttribute("aria-labelledby", heading.id);
+    dlg.setAttribute("tabindex", "-1");
+    scrim.setAttribute("aria-hidden", "true");
+    dlg.appendChild(heading);
     if (text) dlg.appendChild(el("p", "", text));
 
     let field = null;
@@ -707,12 +847,18 @@ function showDialog({ title, text, input, confirmLabel = "OK", danger = false })
     actions.append(cancel, ok);
     dlg.appendChild(actions);
 
+    let settled = false;
     const done = value => {
+      if (settled) return;
+      settled = true;
+      if (activeDialog && activeDialog.dlg === dlg) activeDialog = null;
       scrim.classList.remove("show");
       dlg.classList.remove("show");
+      dlg.setAttribute("aria-hidden", "true");
       setTimeout(() => {
         scrim.remove();
         dlg.remove();
+        if (returnFocus && returnFocus.isConnected) returnFocus.focus();
       }, 260);
       resolve(value);
     };
@@ -728,11 +874,13 @@ function showDialog({ title, text, input, confirmLabel = "OK", danger = false })
     }
 
     document.body.append(scrim, dlg);
+    activeDialog = { dlg, done, returnFocus };
 
     requestAnimationFrame(() => {
       scrim.classList.add("show");
       dlg.classList.add("show");
       if (field) field.focus();
+      else ok.focus();
     });
   });
 }
@@ -747,18 +895,22 @@ function openFilePicker() {
 $("addBtn").onclick = openFilePicker;
 $("libraryAdd").onclick = openFilePicker;
 
-const audioExt = /\.(mp3|m4a|aac|flac|ogg|oga|opus|wav|weba)$/i;
+const audioExt = /\.(mp3|m4a|m4b|aac|flac|ogg|oga|opus|wav|weba|webm|aiff|aif|alac|amr|3gp)$/i;
 
-function addFile(file) {
-  const duplicate = songs.some(
-    s => s.file && s.file.name === file.name && s.file.size === file.size
-  );
-  if (duplicate) return false;
+function fileIdentity(file) {
+  return [file.name, file.size, file.lastModified || 0, file.sourcePath || file.webkitRelativePath || ""].join("::");
+}
+
+async function addFile(file) {
+  const sourceKey = fileIdentity(file);
+  const duplicate = songs.some(s => s.file && (s.sourceKey || fileIdentity(s.file)) === sourceKey);
+  if (duplicate) return { added: false, stored: true };
 
   const song = {
     id: Date.now() + Math.random(),
     name: file.name.replace(/\.[^/.]+$/, ""),
     artist: "Arquivo local",
+    sourceKey,
     favorite: false,
     file: file,
     url: URL.createObjectURL(file),
@@ -771,11 +923,13 @@ function addFile(file) {
   };
 
   songs.push(song);
-  dbPut(toRecord(song));
+  const stored = await dbPut(toRecord(song));
 
   if (window.jsmediatags) {
-    window.jsmediatags.read(file, {
-      onSuccess: result => {
+    try {
+      window.jsmediatags.read(file, {
+        onSuccess: result => {
+          if (!songs.includes(song)) return;
         const tags = result.tags || {};
 
         if (tags.title) song.name = tags.title;
@@ -791,29 +945,38 @@ function addFile(file) {
 
         dbPut(toRecord(song));
         refreshAll();
-      },
-      onError: () => refreshAll()
-    });
+        },
+        onError: () => refreshAll()
+      });
+    } catch {
+      showToast("A música foi adicionada, mas não consegui ler suas informações.");
+    }
   }
 
-  return true;
+  return { added: true, stored };
 }
 
 // Recebe uma lista de arquivos (de qualquer origem), filtra só os de áudio e adiciona
-function importFiles(list, origem) {
+async function importFiles(list, origem) {
   const files = Array.from(list || []).filter(
-    f => f.type.startsWith("audio/") || audioExt.test(f.name)
+    f => (f.type || "").startsWith("audio/") || audioExt.test(f.name)
   );
 
   let added = 0;
-  files.forEach(f => {
-    if (addFile(f)) added++;
-  });
+  let notStored = 0;
+  for (const file of files) {
+    const result = await addFile(file);
+    if (result.added) {
+      added++;
+      if (!result.stored) notStored++;
+    }
+  }
 
   refreshAll();
 
   if (files.length === 0) showToast(origem ? "Nenhuma música encontrada nessa pasta" : "Nenhum áudio selecionado");
   else if (added === 0) showToast("Essas músicas já estão na biblioteca");
+  else if (notStored) showToast(added + " música(s) adicionada(s) só nesta sessão; não foi possível salvá-las.");
   else showToast(added + (added === 1 ? " música adicionada" : " músicas adicionadas") + (origem ? " de " + origem : ""));
 }
 
@@ -828,30 +991,42 @@ fileInput.addEventListener("change", () => {
 const folderInput = $("folderInput");
 
 // Percorre a pasta e as subpastas (File System Access API)
-async function collectFromDirectory(dirHandle, out) {
+async function collectFromDirectory(dirHandle, out, prefix = "") {
   for await (const entry of dirHandle.values()) {
+    const relativePath = prefix ? prefix + "/" + entry.name : entry.name;
     if (entry.kind === "file") {
-      if (audioExt.test(entry.name)) {
-        try { out.push(await entry.getFile()); } catch (_) {}
-      }
+      try {
+        const file = await entry.getFile();
+        try { Object.defineProperty(file, "sourcePath", { value: relativePath }); } catch (_) {}
+        if ((file.type || "").startsWith("audio/") || audioExt.test(file.name)) out.push(file);
+      } catch (_) {}
     } else if (entry.kind === "directory") {
-      await collectFromDirectory(entry, out);
+      await collectFromDirectory(entry, out, relativePath);
     }
   }
 }
 
 async function importFolder() {
   if (window.showDirectoryPicker) {
+    let dir;
     try {
-      const dir = await window.showDirectoryPicker({ mode: "read" });
-      showToast("Lendo a pasta…");
-      const found = [];
-      await collectFromDirectory(dir, found);
-      importFiles(found, "“" + dir.name + "”");
+      dir = await window.showDirectoryPicker({ mode: "read" });
     } catch (e) {
-      if (e && e.name !== "AbortError") showToast("Não consegui abrir essa pasta");
+      if (e && e.name === "AbortError") return;
+      showToast("A seleção de pasta não está disponível aqui; tentando o seletor do navegador.");
     }
-    return;
+
+    if (dir) {
+      try {
+        showToast("Lendo a pasta…");
+        const found = [];
+        await collectFromDirectory(dir, found, dir.name);
+        await importFiles(found, "“" + dir.name + "”");
+        return;
+      } catch (_) {
+        showToast("Não consegui ler essa pasta; tentando o seletor do navegador.");
+      }
+    }
   }
 
   // Alternativa: seletor de pasta do navegador
@@ -956,10 +1131,12 @@ async function deleteSong(song) {
 
   queue = queue.filter(id => id !== song.id);
   playHistory = playHistory.filter(id => id !== song.id);
-  dbDelete(song.id);
+  const deletedFromStorage = await dbDelete(song.id);
 
   refreshAll();
-  showToast("Música excluída");
+  showToast(deletedFromStorage
+    ? "Música excluída"
+    : "Removida desta sessão, mas não foi possível apagá-la do armazenamento.");
 }
 
 function openSongMenu(song, opts = {}) {
@@ -1022,6 +1199,14 @@ function toggleFavorite(song) {
   if (song.favorite) popHeart(song);
 }
 
+function setFavoriteControl(button, song) {
+  button.setAttribute("aria-pressed", String(song.favorite));
+  button.setAttribute(
+    "aria-label",
+    (song.favorite ? "Remover " : "Adicionar ") + song.name + " dos favoritos"
+  );
+}
+
 // coração "estoura" ao favoritar
 function popHeart(song) {
   const nodes = Array.from(
@@ -1041,6 +1226,10 @@ function createSongItem(song, context, opts = {}) {
   const isCurrent = song.id === currentId;
   const item = el("div", "song-item" + (isCurrent ? " playing" : ""));
 
+  const play = el("button", "song-main");
+  play.type = "button";
+  play.setAttribute("aria-label", "Tocar " + song.name + " — " + song.artist);
+
   const cover = el("div", "song-cover");
   setCover(cover, song.cover);
 
@@ -1052,9 +1241,10 @@ function createSongItem(song, context, opts = {}) {
 
   const info = el("div", "song-info");
   info.append(el("strong", "", song.name), el("small", "", song.artist));
+  play.append(cover, info);
 
   const fav = el("button", "icon-btn fav" + (song.favorite ? " active" : ""));
-  fav.setAttribute("aria-label", "Favoritar");
+  setFavoriteControl(fav, song);
   fav.dataset.fav = String(song.id);
   setIcon(fav, song.favorite ? "favorite" : "favorite_border");
   fav.onclick = e => {
@@ -1070,14 +1260,14 @@ function createSongItem(song, context, opts = {}) {
     openSongMenu(song, opts);
   };
 
-  item.onclick = () => {
+  play.onclick = () => {
     if (song.id === currentId) togglePlay();
     else playSong(song.id, context);
   };
 
   attachRipple(item);
 
-  item.append(cover, info, fav, more);
+  item.append(play, fav, more);
   return item;
 }
 
@@ -1111,6 +1301,9 @@ function renderSearch() {
   );
 
   if (results.length === 0) {
+    $("searchStatus").textContent = query
+      ? "Nenhum resultado para " + query + "."
+      : "Nenhuma música na coleção.";
     showEmpty(
       container,
       songs.length === 0 ? "Nenhuma música adicionada" : "Nenhum resultado encontrado",
@@ -1122,6 +1315,9 @@ function renderSearch() {
     return;
   }
 
+  $("searchStatus").textContent = query
+    ? results.length + (results.length === 1 ? " resultado para " : " resultados para ") + query + "."
+    : results.length + (results.length === 1 ? " música na coleção." : " músicas na coleção.");
   const ids = results.map(s => s.id);
   results.forEach(song => container.appendChild(createSongItem(song, ids)));
 }
@@ -1435,6 +1631,11 @@ function updateHome() {
   setCover($("artMain"), main ? main.cover : null);
   setCover($("artSmall1"), pick(0) ? pick(0).cover : null);
   setCover($("artSmall2"), pick(1) ? pick(1).cover : null);
+  [["artMain", main], ["artSmall1", pick(0)], ["artSmall2", pick(1)]].forEach(([id, song]) => {
+    $(id).setAttribute("aria-label", song
+      ? "Tocar " + song.name + " — " + song.artist
+      : "Adicionar músicas");
+  });
 
   $("heroSubtitle").textContent = main ? main.name : "Sua coleção musical";
 
@@ -1561,8 +1762,7 @@ function playSong(id, context, back) {
   dbPut(toRecord(song));
 
   audio.src = song.url;
-  const result = audio.play();
-  if (result && result.catch) result.catch(() => {});
+  playAudio();
 
   onSongChanged();
 }
@@ -1595,8 +1795,7 @@ function togglePlay() {
   }
 
   if (audio.paused) {
-    const result = audio.play();
-    if (result && result.catch) result.catch(() => {});
+    playAudio();
   } else {
     audio.pause();
   }
@@ -1659,6 +1858,27 @@ audio.addEventListener("pause", () => {
   updateMediaState();
 });
 
+let lastPlaybackNotice = 0;
+function notifyPlaybackProblem(message) {
+  const now = Date.now();
+  if (now - lastPlaybackNotice < 1800) return;
+  lastPlaybackNotice = now;
+  showToast(message);
+}
+
+audio.addEventListener("error", () => {
+  if (!current()) return;
+  const code = audio.error ? audio.error.code : 0;
+  if (code === 1) return;
+  let message = "Ocorreu um erro ao ler o arquivo de áudio.";
+  if (code === 2) message = "Falha ao carregar os dados do arquivo de áudio.";
+  else if (code === 3) message = "Não consegui decodificar este arquivo de áudio.";
+  else if (code === 4) message = "Este formato não é compatível com o navegador.";
+  updatePlayButtons();
+  updateMediaState();
+  notifyPlaybackProblem(message);
+});
+
 audio.addEventListener("ended", () => {
   const next = pickNext(true);
 
@@ -1669,8 +1889,7 @@ audio.addEventListener("ended", () => {
 
   if (next === currentId) {
     audio.currentTime = 0;
-    const result = audio.play();
-    if (result && result.catch) result.catch(() => {});
+    playAudio();
   } else {
     playSong(next);
   }
@@ -1745,8 +1964,27 @@ function updatePositionState() {
 }
 
 function playAudio() {
-  const result = audio.play();
-  if (result && result.catch) result.catch(() => {});
+  let result;
+  try {
+    result = audio.play();
+  } catch (error) {
+    notifyPlayRejected(error);
+    return;
+  }
+  if (result && result.catch) {
+    result.catch(notifyPlayRejected);
+  }
+}
+
+function notifyPlayRejected(error) {
+  if (error && error.name === "AbortError") return;
+  if (error && error.name === "NotAllowedError") {
+    notifyPlaybackProblem("O navegador bloqueou a reprodução. Toque novamente em reproduzir.");
+  } else if (error && error.name === "NotSupportedError") {
+    notifyPlaybackProblem("Este formato não é compatível com o navegador.");
+  } else {
+    notifyPlaybackProblem("Não foi possível iniciar a reprodução desta música.");
+  }
 }
 
 function initMediaSessionHandlers() {
@@ -1921,6 +2159,7 @@ function updateFullPlayer() {
 
   setIcon($("fpFav"), song.favorite ? "favorite" : "favorite_border");
   $("fpFav").classList.toggle("active", song.favorite);
+  setFavoriteControl($("fpFav"), song);
 
   $("fpShuffle").classList.toggle("on", shuffle);
 
@@ -1934,6 +2173,8 @@ function updateFullPlayer() {
   $("fullPlayer").style.setProperty("--fp-bg", song.cover ? 'url("' + song.cover + '")' : "none");
 }
 
+let fpReturnFocus = null;
+
 function openFullPlayer() {
   if (!current()) return;
 
@@ -1943,6 +2184,7 @@ function openFullPlayer() {
   document.body.classList.add("no-scroll");
 
   if (!fpOpen) {
+    fpReturnFocus = document.activeElement;
     try {
       history.pushState({ fp: 1 }, "");
     } catch {}
@@ -1950,11 +2192,14 @@ function openFullPlayer() {
 
   fpOpen = true;
   startWave();
+  requestAnimationFrame(() => $("fpClose").focus());
   if (lyricsView) requestAnimationFrame(scrollLyricsToActive);
 }
 
 function closeFullPlayer(fromPop) {
   if (!fpOpen) return;
+  const returnFocus = fpReturnFocus;
+  fpReturnFocus = null;
   fpOpen = false;
 
   $("fullPlayer").classList.remove("open");
@@ -1966,6 +2211,7 @@ function closeFullPlayer(fromPop) {
       if (history.state && history.state.fp) history.back();
     } catch {}
   }
+  if (returnFocus && returnFocus.isConnected) returnFocus.focus();
 }
 
 window.addEventListener("popstate", () => {
@@ -2054,6 +2300,7 @@ function switchRow(title, desc, key) {
 }
 
 function openSettings() {
+  const returnFocus = activeSheet ? activeSheet.returnFocus : document.activeElement;
   closeSheet();
 
   const scrim = el("div", "scrim");
@@ -2140,10 +2387,10 @@ function openSettings() {
   const permRow = el("button", "set-row");
   const permText = el("div", "set-row-text");
   permText.append(
-    el("strong", "", "Permissões"),
-    el("span", "", "Notificações e pasta de músicas")
+    el("strong", "", "Importação e controles"),
+    el("span", "", "Escolha arquivos e veja o suporte do navegador")
   );
-  permRow.append(permText, el("span", "material-symbols-rounded", "notifications"));
+  permRow.append(permText, el("span", "material-symbols-rounded", "folder"));
   permRow.onclick = () => openPermissions(false);
   sec.appendChild(permRow);
 
@@ -2254,13 +2501,7 @@ function openSettings() {
   sheet.appendChild(shapeSec);
 
   scrim.onclick = closeSheet;
-  document.body.append(scrim, sheet);
-  activeSheet = { scrim, sheet };
-
-  requestAnimationFrame(() => {
-    scrim.classList.add("show");
-    sheet.classList.add("show");
-  });
+  presentSheet(scrim, sheet, returnFocus);
 }
 
 
@@ -2354,6 +2595,7 @@ function applyShapes() {
 const DEFAULT_PREV = { artMain: "blob", artSmall1: "circle", artSmall2: "circle", heroPlay: "squircle" };
 
 function openShapePicker(id, backToSettings) {
+  const returnFocus = activeSheet ? activeSheet.returnFocus : document.activeElement;
   closeSheet();
 
   const scrim = el("div", "scrim");
@@ -2386,133 +2628,60 @@ function openShapePicker(id, backToSettings) {
   sheet.appendChild(grid);
 
   scrim.onclick = closeSheet;
-  document.body.append(scrim, sheet);
-  activeSheet = { scrim, sheet };
-
-  requestAnimationFrame(() => {
-    scrim.classList.add("show");
-    sheet.classList.add("show");
-  });
+  presentSheet(scrim, sheet, returnFocus);
 }
 
 
 /* ==========================================================
-   Permissões (notificações e armazenamento)
+   Importação e suporte do navegador
    ========================================================== */
-async function getPermState() {
-  const notif = "Notification" in window ? Notification.permission : "unsupported"; // granted | denied | default
-  return { notif };
-}
-
-async function askNotifications() {
-  if (!("Notification" in window)) return "unsupported";
-  try {
-    return await Notification.requestPermission();
-  } catch (_) {
-    return Notification.permission;
-  }
-}
-
 async function openPermissions(firstRun) {
+  const returnFocus = firstRun
+    ? $("homeSettings")
+    : activeSheet ? activeSheet.returnFocus : document.activeElement;
   closeSheet();
   if (firstRun) lsSet("permsAsked", true);
 
   const scrim = el("div", "scrim");
   const sheet = el("div", "sheet");
   sheet.appendChild(el("div", "sheet-handle"));
-  sheet.appendChild(el("h3", "", firstRun ? "Bem-vindo à Música!" : "Permissões"));
+  sheet.appendChild(el("h3", "", firstRun ? "Bem-vindo à Música!" : "Importar músicas"));
   sheet.appendChild(
-    el("div", "set-hint perm-intro", "Libere as notificações e já escolha a pasta com suas músicas. Dá para mudar tudo depois nos Ajustes.")
+    el("div", "set-hint perm-intro", "Escolha arquivos ou uma pasta para adicionar músicas. O app só recebe os itens que você selecionar.")
   );
 
   const sec = el("div", "set-sec");
-  const rows = [
-    {
-      key: "notif",
-      icon: "notifications",
-      title: "Notificações",
-      desc: "Controles da música na barra de notificações e na tela de bloqueio",
-      ask: askNotifications
-    },
-    {
-      key: "folder",
-      icon: "folder",
-      title: "Pasta de músicas",
-      desc: "Escolha uma pasta do celular para importar suas músicas de uma vez",
-      label: "Escolher",
-      ask: async () => {
-        await importFolder();
-        return "granted";
-      }
-    }
-  ];
-
-  const refs = [];
-  rows.forEach(r => {
+  const addOption = (icon, title, desc, label, action) => {
     const row = el("div", "set-row perm-row");
-    row.appendChild(el("span", "material-symbols-rounded perm-ico", r.icon));
+    row.appendChild(el("span", "material-symbols-rounded perm-ico", icon));
     const text = el("div", "set-row-text");
-    text.append(el("strong", "", r.title), el("span", "", r.desc));
-    const btn = el("button", "perm-btn", r.label || "Permitir");
+    text.append(el("strong", "", title), el("span", "", desc));
+    const btn = el("button", "perm-btn", label);
+    btn.onclick = () => {
+      closeSheet();
+      action();
+    };
     row.append(text, btn);
     sec.appendChild(row);
-    refs.push({ r, btn });
-  });
-
-  const paint = async () => {
-    const st = await getPermState();
-    refs.forEach(({ r, btn }) => {
-      if (r.key === "folder") return;
-      const v = st[r.key];
-      btn.disabled = false;
-      btn.classList.remove("ok");
-      if (v === "granted") {
-        btn.textContent = "Ativado";
-        btn.classList.add("ok");
-        btn.disabled = true;
-      } else if (v === "denied") {
-        btn.textContent = "Bloqueado";
-        btn.disabled = true;
-      } else if (v === "unsupported") {
-        btn.textContent = "Indisponível";
-        btn.disabled = true;
-      } else {
-        btn.textContent = "Permitir";
-      }
-    });
   };
 
-  refs.forEach(({ r, btn }) => {
-    btn.onclick = async () => {
-      const res = await r.ask();
-      if (res !== "granted") showToast("Não foi liberado. Você pode ativar em Configurações do Android > Apps > Música.");
-      paint();
-    };
-  });
+  addOption("folder", "Pasta de músicas", "Importa arquivos de áudio encontrados na pasta escolhida.", "Escolher", importFolder);
+  addOption("upload_file", "Arquivos de áudio", "Selecione uma ou mais músicas individualmente.", "Escolher", openFilePicker);
 
   const note = el(
     "div",
     "set-hint",
-    "Se alguma ficar \"Bloqueado\", libere em Configurações do Android > Apps > Música > Permissões."
+    "Os controles na tela bloqueada dependem do suporte do navegador. Eles não precisam da permissão de notificações."
   );
-
   const done = el("button", "perm-done", firstRun ? "Continuar" : "Fechar");
   done.onclick = closeSheet;
 
   sheet.append(sec, note, done);
   scrim.onclick = closeSheet;
-  document.body.append(scrim, sheet);
-  activeSheet = { scrim, sheet };
-
-  requestAnimationFrame(() => {
-    scrim.classList.add("show");
-    sheet.classList.add("show");
-  });
-
-  paint();
+  presentSheet(scrim, sheet, returnFocus);
 }
 
-// Primeira abertura: mostra o aviso uma vez (só se faltar alguma permissão)
+// Primeira abertura: mostra opções de importação uma vez.
 async function maybeAskPermissionsFirstRun() {
   if (lsGet("permsAsked", false)) return;
   setTimeout(() => openPermissions(true), 1500);

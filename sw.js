@@ -1,20 +1,22 @@
-// Service worker: deixa o app abrir sem internet.
-// Arquivos do app: tenta a rede primeiro (pega atualização) e cai no cache se estiver offline.
-const CACHE = "musica-v26";
+// Service worker: mantém os arquivos do player disponíveis offline.
+const CACHE = "aplicativo-reprodutor-musica-v27";
+const APP_CACHE_PREFIX = "aplicativo-reprodutor-musica-v";
+const LEGACY_CACHE_NAMES = new Set(["musica-v26"]);
 const CORE = [
   "./",
   "index.html",
   "style.css",
   "script.js",
+  "jsmediatags.min.js",
   "manifest.json",
   "icon-192.png",
-  "icon-512.png"
+  "icon-512.png",
+  "icon-maskable-512.png"
 ];
 
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches
-      .open(CACHE)
+    caches.open(CACHE)
       .then(cache => cache.addAll(CORE))
       .then(() => self.skipWaiting())
   );
@@ -22,9 +24,12 @@ self.addEventListener("install", event => {
 
 self.addEventListener("activate", event => {
   event.waitUntil(
-    caches
-      .keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+    caches.keys()
+      .then(keys => Promise.all(
+        keys
+          .filter(key => (key.startsWith(APP_CACHE_PREFIX) && key !== CACHE) || LEGACY_CACHE_NAMES.has(key))
+          .map(key => caches.delete(key))
+      ))
       .then(() => self.clients.claim())
   );
 });
@@ -34,37 +39,40 @@ self.addEventListener("fetch", event => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-  const sameOrigin = url.origin === self.location.origin;
-  const external = /fonts\.(googleapis|gstatic)\.com|cdnjs\.cloudflare\.com/.test(url.hostname);
+  const scope = new URL(self.registration.scope);
+  if (url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return;
 
-  if (sameOrigin) {
-    event.respondWith(
-      fetch(req)
-        .then(res => {
-          const copy = res.clone();
-          caches.open(CACHE).then(cache => cache.put(req, copy));
-          return res;
-        })
-        .catch(() =>
-          caches.match(req, { ignoreSearch: true }).then(hit => hit || caches.match("index.html"))
-        )
-    );
-    return;
-  }
+  event.respondWith((async () => {
+    const fromCache = async () => {
+      const hit = await caches.match(req, { ignoreSearch: true });
+      if (hit) return hit;
+      if (req.mode === "navigate") {
+        return caches.match(new URL("index.html", self.registration.scope).href);
+      }
+      return null;
+    };
 
-  if (external) {
-    // fontes e biblioteca de tags: usa o que já está guardado e atualiza por trás
-    event.respondWith(
-      caches.match(req).then(hit => {
-        const net = fetch(req)
-          .then(res => {
-            const copy = res.clone();
-            caches.open(CACHE).then(cache => cache.put(req, copy));
-            return res;
-          })
-          .catch(() => hit);
-        return hit || net;
-      })
-    );
-  }
+    try {
+      const response = await fetch(req);
+      if (response.ok) {
+        try {
+          const cache = await caches.open(CACHE);
+          await cache.put(req, response.clone());
+        } catch (_) {
+          // Uma falha de cache não deve impedir a resposta online.
+        }
+        return response;
+      }
+
+      const cached = await fromCache();
+      return cached || response;
+    } catch (_) {
+      const cached = await fromCache();
+      return cached || new Response("Offline: este recurso ainda não está em cache.", {
+        status: 504,
+        statusText: "Gateway Timeout",
+        headers: { "Content-Type": "text/plain; charset=utf-8" }
+      });
+    }
+  })());
 });

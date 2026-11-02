@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Fontes carregam em segundo plano: a página aparece na hora, mesmo com internet lenta -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <link rel="stylesheet" href="style.css?v=26">
+  <link rel="stylesheet" href="style.css?v=27">
 </head>
 
 <body data-page="home">
@@ -80,11 +80,12 @@
 
       <label class="search-box">
         <span class="material-symbols-rounded">search</span>
-        <input id="searchInput" type="search" placeholder="Pesquisar músicas..." autocomplete="off">
+        <input id="searchInput" type="search" aria-label="Pesquisar músicas na coleção" placeholder="Pesquisar músicas..." autocomplete="off">
       </label>
 
       <h2 class="page-section-title">Suas músicas</h2>
       <div class="song-list" id="searchSongList"></div>
+      <p class="sr-only" id="searchStatus" role="status" aria-live="polite" aria-atomic="true"></p>
 
     </section>
 
@@ -136,12 +137,12 @@
   </nav>
 
   <!-- ============ PLAYER COMPLETO ============ -->
-  <div class="full-player" id="fullPlayer" aria-hidden="true">
+  <div class="full-player" id="fullPlayer" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="fpDialogTitle" tabindex="-1">
     <div class="fp-top">
       <button class="icon-btn" id="fpClose" aria-label="Fechar">
         <span class="material-symbols-rounded">keyboard_arrow_down</span>
       </button>
-      <span class="fp-top-title">Tocando agora</span>
+      <span class="fp-top-title" id="fpDialogTitle">Tocando agora</span>
       <div class="fp-top-actions">
         <button class="icon-btn" id="fpLyricsBtn" aria-label="Letra">
           <span class="material-symbols-rounded">lyrics</span>
@@ -162,7 +163,7 @@
         <h2 id="fpTitle">—</h2>
         <p id="fpArtist">—</p>
       </div>
-      <button class="icon-btn fp-fav" id="fpFav" aria-label="Favoritar"></button>
+      <button class="icon-btn fp-fav" id="fpFav" aria-label="Adicionar aos favoritos" aria-pressed="false"></button>
     </div>
 
     <div class="fp-progress">
@@ -190,7 +191,7 @@
     </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
-  <script src="script.js?v=26"></script>
+  <script src="jsmediatags.min.js?v=27"></script>
+  <script src="script.js?v=27"></script>
 </body>
 </html>

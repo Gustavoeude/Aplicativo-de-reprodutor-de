@@ -2168,3 +2168,49 @@ body.font-wide .home-eyebrow, body.font-wide .eyebrow { letter-spacing: 0; }
   color: var(--md-on-surface-variant);
 }
 .font-del:active { background: color-mix(in srgb, var(--md-on-surface) 12%, transparent); }
+
+
+/* Acessibilidade: foco de teclado visível e controles nativos */
+:focus-visible {
+  outline: 3px solid var(--md-primary);
+  outline-offset: 3px;
+}
+
+.search-box:focus-within {
+  outline: 3px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.seek:focus-visible {
+  outline: 3px solid var(--md-primary);
+  outline-offset: 4px;
+  border-radius: 16px;
+}
+
+.song-main {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 12px;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+}
+
+.song-main:focus-visible {
+  border-radius: 12px;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
