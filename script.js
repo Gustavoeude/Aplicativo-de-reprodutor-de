@@ -896,15 +896,36 @@ $("addBtn").onclick = openFilePicker;
 $("libraryAdd").onclick = openFilePicker;
 
 const audioExt = /\.(mp3|m4a|m4b|aac|flac|ogg|oga|opus|wav|weba|webm|aiff|aif|alac|amr|3gp)$/i;
+const lrcExt = /\.lrc$/i;
 
 function fileIdentity(file) {
   return [file.name, file.size, file.lastModified || 0, file.sourcePath || file.webkitRelativePath || ""].join("::");
 }
 
-async function addFile(file) {
+function lyricsMatchKey(file) {
+  const path = (file.sourcePath || file.webkitRelativePath || file.name || "").replace(/\\/g, "/");
+  return path.replace(/\.[^/.]+$/, "").normalize("NFKC").toLocaleLowerCase("pt-BR");
+}
+
+function lyricsFromTag(value) {
+  if (typeof value === "string") return value.replace(/^\uFEFF/, "").trim();
+  if (!value || typeof value !== "object") return "";
+  const text = value.lyrics || value.text || value.value || "";
+  return typeof text === "string" ? text.replace(/^\uFEFF/, "").trim() : "";
+}
+
+async function addFile(file, automaticLyrics = "") {
   const sourceKey = fileIdentity(file);
-  const duplicate = songs.some(s => s.file && (s.sourceKey || fileIdentity(s.file)) === sourceKey);
-  if (duplicate) return { added: false, stored: true };
+  const duplicate = songs.find(s => s.file && (s.sourceKey || fileIdentity(s.file)) === sourceKey);
+  if (duplicate) {
+    if (!duplicate.lyrics && automaticLyrics) {
+      duplicate.lyrics = automaticLyrics;
+      const stored = await dbPut(toRecord(duplicate));
+      if (duplicate.id === currentId) renderLyrics(duplicate);
+      return { added: false, stored, lyricsAdded: true };
+    }
+    return { added: false, stored: true, lyricsAdded: false };
+  }
 
   const song = {
     id: Date.now() + Math.random(),
@@ -918,7 +939,7 @@ async function addFile(file) {
     cover: null,
     playCount: 0,
     lastPlayed: 0,
-    lyrics: "",
+    lyrics: automaticLyrics || "",
     seed: null
   };
 
@@ -934,6 +955,11 @@ async function addFile(file) {
 
         if (tags.title) song.name = tags.title;
         if (tags.artist) song.artist = tags.artist;
+        const embeddedLyrics = lyricsFromTag(tags.lyrics);
+        if (!song.lyrics && embeddedLyrics) {
+          song.lyrics = embeddedLyrics;
+          if (song.id === currentId) renderLyrics(song);
+        }
 
         if (tags.picture) {
           const picture = tags.picture;
@@ -953,31 +979,57 @@ async function addFile(file) {
     }
   }
 
-  return { added: true, stored };
+  return { added: true, stored, lyricsAdded: !!automaticLyrics };
 }
 
-// Recebe uma lista de arquivos (de qualquer origem), filtra só os de áudio e adiciona
+async function readSidecarLyrics(files) {
+  const bySong = new Map();
+  for (const file of files) {
+    if (!lrcExt.test(file.name)) continue;
+    const key = lyricsMatchKey(file);
+    if (!key || bySong.has(key)) continue;
+    try {
+      const text = (await file.text()).replace(/^\uFEFF/, "").trim();
+      if (text && parseLrc(text).lines.length) bySong.set(key, text);
+    } catch (_) {}
+  }
+  return bySong;
+}
+
+// Recebe músicas e, se estiverem disponíveis no mesmo lote/pasta, associa arquivos LRC homônimos.
 async function importFiles(list, origem) {
-  const files = Array.from(list || []).filter(
+  const selectedFiles = Array.from(list || []);
+  const files = selectedFiles.filter(
     f => (f.type || "").startsWith("audio/") || audioExt.test(f.name)
   );
+  const sidecars = await readSidecarLyrics(selectedFiles);
 
   let added = 0;
   let notStored = 0;
+  let lyricsAdded = 0;
   for (const file of files) {
-    const result = await addFile(file);
+    const result = await addFile(file, sidecars.get(lyricsMatchKey(file)) || "");
     if (result.added) {
       added++;
       if (!result.stored) notStored++;
     }
+    if (result.lyricsAdded) lyricsAdded++;
   }
 
   refreshAll();
 
-  if (files.length === 0) showToast(origem ? "Nenhuma música encontrada nessa pasta" : "Nenhum áudio selecionado");
-  else if (added === 0) showToast("Essas músicas já estão na biblioteca");
+  if (files.length === 0) {
+    showToast(selectedFiles.some(f => lrcExt.test(f.name))
+      ? "Selecione também a música correspondente para associar a letra."
+      : origem ? "Nenhuma música encontrada nessa pasta" : "Nenhum áudio selecionado");
+  } else if (added === 0 && lyricsAdded === 0) showToast("Essas músicas já estão na biblioteca");
+  else if (added === 0) showToast(lyricsAdded + (lyricsAdded === 1 ? " letra associada à música existente" : " letras associadas às músicas existentes"));
   else if (notStored) showToast(added + " música(s) adicionada(s) só nesta sessão; não foi possível salvá-las.");
-  else showToast(added + (added === 1 ? " música adicionada" : " músicas adicionadas") + (origem ? " de " + origem : ""));
+  else {
+    let message = added + (added === 1 ? " música adicionada" : " músicas adicionadas") + (origem ? " de " + origem : "");
+    if (lyricsAdded) message += " · " + lyricsAdded + (lyricsAdded === 1 ? " letra encontrada" : " letras encontradas");
+    showToast(message);
+  }
 }
 
 fileInput.addEventListener("change", () => {
@@ -998,7 +1050,7 @@ async function collectFromDirectory(dirHandle, out, prefix = "") {
       try {
         const file = await entry.getFile();
         try { Object.defineProperty(file, "sourcePath", { value: relativePath }); } catch (_) {}
-        if ((file.type || "").startsWith("audio/") || audioExt.test(file.name)) out.push(file);
+        if ((file.type || "").startsWith("audio/") || audioExt.test(file.name) || lrcExt.test(file.name)) out.push(file);
       } catch (_) {}
     } else if (entry.kind === "directory") {
       await collectFromDirectory(entry, out, relativePath);
