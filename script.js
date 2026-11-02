@@ -2322,62 +2322,81 @@ audio.addEventListener("playing", () => {
 });
 
 /* ---------- Media Session (notificação / tela de bloqueio) ---------- */
+// O plugin nativo mantém a sessão de mídia e o serviço Android ativos em segundo plano.
+// No navegador comum, continua usando a Media Session API padrão.
+function nativeMediaSession() {
+  return window.Capacitor && window.Capacitor.Plugins
+    ? window.Capacitor.Plugins.MediaSession
+    : null;
+}
+
+function callNativeMedia(method, options) {
+  const plugin = nativeMediaSession();
+  if (!plugin || typeof plugin[method] !== "function") return;
+  try {
+    const result = plugin[method](options);
+    if (result && typeof result.catch === "function") result.catch(() => {});
+  } catch (_) {}
+}
+
 function updateMediaSession() {
-  if (!("mediaSession" in navigator)) return;
   const song = current();
   if (!song) return;
 
-  try {
-    const type = (song.coverBlob && song.coverBlob.type) || "image/jpeg";
-    const art = song.cover
-      ? ["96x96", "128x128", "192x192", "256x256", "384x384", "512x512"].map(sizes => ({
-          src: song.cover,
-          sizes: sizes,
-          type: type
-        }))
-      : [{ src: "icon-512.png", sizes: "512x512", type: "image/png" }];
+  const type = (song.coverBlob && song.coverBlob.type) || "image/jpeg";
+  const art = song.cover
+    ? ["96x96", "128x128", "192x192", "256x256", "384x384", "512x512"].map(sizes => ({
+        src: song.cover, sizes, type
+      }))
+    : [{ src: "icon-512.png", sizes: "512x512", type: "image/png" }];
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: song.name,
-      artist: song.artist,
-      album: "Música",
-      artwork: art
-    });
-  } catch {}
+  if ("mediaSession" in navigator) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: song.name, artist: song.artist, album: "Música", artwork: art
+      });
+    } catch (_) {}
+  }
+
+  callNativeMedia("setMetadata", {
+    title: song.name || "Música",
+    artist: song.artist || "Artista desconhecido",
+    album: "Música",
+    artwork: art
+  });
 }
 
 function updateMediaState() {
+  const state = audio.paused ? "paused" : "playing";
   if ("mediaSession" in navigator) {
-    try {
-      navigator.mediaSession.playbackState = audio.paused ? "paused" : "playing";
-    } catch {}
+    try { navigator.mediaSession.playbackState = state; } catch (_) {}
   }
+  callNativeMedia("setPlaybackState", { playbackState: state });
 }
 
 function updatePositionState() {
-  if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
   if (!isFinite(audio.duration) || audio.duration <= 0) return;
+  const position = Math.min(audio.currentTime || 0, audio.duration);
+  const playbackRate = audio.playbackRate || 1;
 
-  try {
-    navigator.mediaSession.setPositionState({
-      duration: audio.duration,
-      playbackRate: audio.playbackRate || 1,
-      position: Math.min(audio.currentTime, audio.duration)
-    });
-  } catch {}
+  if ("mediaSession" in navigator && navigator.mediaSession.setPositionState) {
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: audio.duration, playbackRate, position
+      });
+    } catch (_) {}
+  }
+
+  callNativeMedia("setPositionState", {
+    duration: audio.duration, playbackRate, position
+  });
 }
 
 function playAudio() {
   let result;
-  try {
-    result = audio.play();
-  } catch (error) {
-    notifyPlayRejected(error);
-    return;
-  }
-  if (result && result.catch) {
-    result.catch(notifyPlayRejected);
-  }
+  try { result = audio.play(); }
+  catch (error) { notifyPlayRejected(error); return; }
+  if (result && result.catch) result.catch(notifyPlayRejected);
 }
 
 function notifyPlayRejected(error) {
@@ -2392,7 +2411,9 @@ function notifyPlayRejected(error) {
 }
 
 function initMediaSessionHandlers() {
-  if (!("mediaSession" in navigator)) return;
+  const hasWeb = "mediaSession" in navigator;
+  const hasNative = !!nativeMediaSession();
+  if (!hasWeb && !hasNative) return;
 
   const handlers = {
     play: () => {
@@ -2400,10 +2421,7 @@ function initMediaSessionHandlers() {
       else playAudio();
     },
     pause: () => audio.pause(),
-    stop: () => {
-      audio.pause();
-      audio.currentTime = 0;
-    },
+    stop: () => { audio.pause(); audio.currentTime = 0; },
     previoustrack: playPrev,
     nexttrack: playNext,
     seekbackward: d => {
@@ -2424,9 +2442,20 @@ function initMediaSessionHandlers() {
   };
 
   Object.keys(handlers).forEach(name => {
-    try {
-      navigator.mediaSession.setActionHandler(name, handlers[name]);
-    } catch {}
+    if (hasWeb) {
+      try { navigator.mediaSession.setActionHandler(name, handlers[name]); } catch (_) {}
+    }
+    callNativeMedia("setActionHandler", {
+      action: name,
+      // O callback é passado separadamente abaixo, conforme a API do plugin.
+    });
+    const plugin = nativeMediaSession();
+    if (plugin && typeof plugin.setActionHandler === "function") {
+      try {
+        const result = plugin.setActionHandler({ action: name }, handlers[name]);
+        if (result && result.catch) result.catch(() => {});
+      } catch (_) {}
+    }
   });
 }
 
