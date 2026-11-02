@@ -243,13 +243,19 @@ function toRecord(song) {
     id: song.id,
     name: song.name,
     artist: song.artist,
+    album: song.album || "",
     sourceKey: song.sourceKey || fileIdentity(song.file),
     favorite: song.favorite,
     file: song.file,
     coverBlob: song.coverBlob || null,
     playCount: song.playCount || 0,
     lastPlayed: song.lastPlayed || 0,
-    lyrics: song.lyrics || ""
+    lyrics: song.lyrics || "",
+    lyricsSource: song.lyricsSource || "",
+    lyricsSourceId: song.lyricsSourceId || null,
+    lyricsSearchAt: song.lyricsSearchAt || 0,
+    lyricsRetryAt: song.lyricsRetryAt || 0,
+    lyricsRetryReason: song.lyricsRetryReason || ""
   };
 }
 
@@ -258,6 +264,7 @@ function makeSong(r) {
     id: r.id,
     name: r.name,
     artist: r.artist,
+    album: r.album || "",
     sourceKey: r.sourceKey || fileIdentity(r.file),
     favorite: !!r.favorite,
     file: r.file,
@@ -267,6 +274,11 @@ function makeSong(r) {
     playCount: r.playCount || 0,
     lastPlayed: r.lastPlayed || 0,
     lyrics: r.lyrics || "",
+    lyricsSource: r.lyricsSource || "",
+    lyricsSourceId: r.lyricsSourceId || null,
+    lyricsSearchAt: r.lyricsSearchAt || 0,
+    lyricsRetryAt: r.lyricsRetryAt || 0,
+    lyricsRetryReason: r.lyricsRetryReason || "",
     seed: null
   };
 }
@@ -295,7 +307,7 @@ let homeMain = null;
 let lrcTargetId = null;
 let seed = { h: 215, s: 0.8 };
 let settings = Object.assign(
-  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false, font: "roboto" },
+  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false, font: "roboto", autoLyrics: true },
   lsGet("settings", {})
 );
 if (!settings.shapes || typeof settings.shapes !== "object") settings.shapes = {};
@@ -914,16 +926,211 @@ function lyricsFromTag(value) {
   return typeof text === "string" ? text.replace(/^\uFEFF/, "").trim() : "";
 }
 
+const LRCLIB_SEARCH_URL = "https://lrclib.net/api/search";
+const LRCLIB_CLIENT = "ReprodutorMusicalWeb/1.0 (https://github.com/Gustavoeude/Aplicativo-de-reprodutor-de)";
+const lyricsLookupStatus = new Map();
+const lyricsLookupInFlight = new Map();
+let lyricsLookupQueue = Promise.resolve();
+let lastLyricsLookupAt = 0;
+
+function normalizeLyricsLookup(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function lyricsLookupTitle(song) {
+  return String(song && song.name || "").replace(/^\s*\d{1,3}\s*[-._)\]]+\s*/, "").trim();
+}
+
+function lyricsLookupArtist(song) {
+  const artist = normalizeLyricsLookup(song && song.artist);
+  return !artist || ["arquivo local", "artista desconhecido", "unknown"].includes(artist) ? "" : artist;
+}
+
+function readLocalTrackDuration(song) {
+  if (!song || !song.url) return Promise.resolve(null);
+  return new Promise(resolve => {
+    const probe = document.createElement("audio");
+    let settled = false;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      probe.removeAttribute("src");
+      probe.load();
+      resolve(Number.isFinite(value) && value > 0 ? value : null);
+    };
+    const timer = setTimeout(() => finish(null), 7000);
+    probe.preload = "metadata";
+    probe.addEventListener("loadedmetadata", () => finish(probe.duration), { once: true });
+    probe.addEventListener("error", () => finish(null), { once: true });
+    probe.src = song.url;
+    probe.load();
+  });
+}
+
+function chooseLyricsRecord(song, records, duration) {
+  const title = normalizeLyricsLookup(lyricsLookupTitle(song));
+  if (!title || !Array.isArray(records)) return null;
+  const artist = lyricsLookupArtist(song);
+  let candidates = records.filter(record =>
+    normalizeLyricsLookup(record.trackName || record.name) === title &&
+    (!artist || normalizeLyricsLookup(record.artistName) === artist)
+  );
+  if (Number.isFinite(duration)) {
+    candidates = candidates.filter(record =>
+      Number.isFinite(Number(record.duration)) && Math.abs(Number(record.duration) - duration) <= 2
+    );
+  }
+  if (!artist) {
+    const artists = new Set(candidates.map(record => normalizeLyricsLookup(record.artistName)).filter(Boolean));
+    if (artists.size > 1) return null;
+  }
+  if (!duration && candidates.length > 1) {
+    const albums = new Set(candidates.map(record => normalizeLyricsLookup(record.albumName)).filter(Boolean));
+    if (albums.size > 1) return null;
+  }
+  const album = normalizeLyricsLookup(song && song.album);
+  candidates.sort((a, b) => {
+    if (album) {
+      const albumA = Number(normalizeLyricsLookup(a.albumName) === album);
+      const albumB = Number(normalizeLyricsLookup(b.albumName) === album);
+      if (albumA !== albumB) return albumB - albumA;
+    }
+    const sync = Number(!!b.syncedLyrics) - Number(!!a.syncedLyrics);
+    if (sync) return sync;
+    if (Number.isFinite(duration)) return Math.abs(Number(a.duration) - duration) - Math.abs(Number(b.duration) - duration);
+    return 0;
+  });
+  return candidates.find(record => record.syncedLyrics || record.plainLyrics) || null;
+}
+
+async function fetchLyricsRecord(song) {
+  const title = lyricsLookupTitle(song);
+  if (!title) return null;
+  const params = new URLSearchParams({ track_name: title });
+  const artist = lyricsLookupArtist(song);
+  if (artist) params.set("artist_name", song.artist);
+  if (song.album) params.set("album_name", song.album);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 9000);
+  let response;
+  try {
+    response = await fetch(LRCLIB_SEARCH_URL + "?" + params.toString(), {
+      method: "GET",
+      headers: { "Lrclib-Client": LRCLIB_CLIENT },
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (response.status === 429) {
+    const error = new Error("rate-limited");
+    error.retryAfter = Math.max(1, Number(response.headers.get("Retry-After")) || 60);
+    error.retryReason = "rate";
+    throw error;
+  }
+  if (response.status === 503) {
+    const error = new Error("service-busy");
+    error.retryAfter = Math.max(1, Number(response.headers.get("Retry-After")) || 5);
+    error.retryReason = "busy";
+    throw error;
+  }
+  if (!response.ok) throw new Error("lyrics-service-" + response.status);
+  const records = await response.json();
+  const duration = await readLocalTrackDuration(song);
+  return chooseLyricsRecord(song, records, duration);
+}
+
+function updateLyricsLookupView(song) {
+  if (!song || !songs.includes(song)) return;
+  updateMiniPlayer();
+  if (song.id === currentId && lyricsView) renderLyrics(song);
+}
+
+function requestOnlineLyrics(song, force = false) {
+  if (!song || song.lyrics || !songs.includes(song)) return Promise.resolve(false);
+  if (!force && !settings.autoLyrics) return Promise.resolve(false);
+  if (lyricsLookupInFlight.has(song.id)) return lyricsLookupInFlight.get(song.id);
+  const now = Date.now();
+  if (song.lyricsRetryAt > now) {
+    if (!(force && song.lyricsRetryReason === "error")) {
+      lyricsLookupStatus.set(song.id, song.lyricsRetryReason === "error" ? "error" : "limited");
+      updateLyricsLookupView(song);
+      return Promise.resolve(false);
+    }
+    song.lyricsRetryAt = 0;
+    song.lyricsRetryReason = "";
+  }
+  if (!force && song.lyricsSearchAt && now - song.lyricsSearchAt < 24 * 60 * 60 * 1000) {
+    lyricsLookupStatus.set(song.id, "not-found");
+    return Promise.resolve(false);
+  }
+
+  const task = lyricsLookupQueue.then(async () => {
+    if (!songs.includes(song) || song.lyrics || (!force && !settings.autoLyrics)) return false;
+    const wait = Math.max(0, 1500 - (Date.now() - lastLyricsLookupAt));
+    if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+    if (!songs.includes(song) || song.lyrics) return false;
+    lyricsLookupStatus.set(song.id, "searching");
+    updateLyricsLookupView(song);
+    lastLyricsLookupAt = Date.now();
+    try {
+      const record = await fetchLyricsRecord(song);
+      if (!songs.includes(song)) return false;
+      song.lyricsSearchAt = Date.now();
+      song.lyricsRetryAt = 0;
+      song.lyricsRetryReason = "";
+      if (record) {
+        song.lyrics = record.syncedLyrics || record.plainLyrics || "";
+        song.lyricsSource = "lrclib";
+        song.lyricsSourceId = record.id || null;
+        lyricsLookupStatus.set(song.id, "found");
+      } else {
+        lyricsLookupStatus.set(song.id, "not-found");
+      }
+      await dbPut(toRecord(song));
+      refreshAll();
+      updateLyricsLookupView(song);
+      return !!record;
+    } catch (error) {
+      if (!songs.includes(song)) return false;
+      if (error && error.retryAfter) {
+        song.lyricsRetryAt = Date.now() + error.retryAfter * 1000;
+        song.lyricsRetryReason = error.retryReason || "rate";
+        lyricsLookupStatus.set(song.id, "limited");
+      } else {
+        song.lyricsRetryAt = Date.now() + 5 * 60 * 1000;
+        song.lyricsRetryReason = "error";
+        lyricsLookupStatus.set(song.id, "error");
+      }
+      await dbPut(toRecord(song));
+      updateLyricsLookupView(song);
+      return false;
+    }
+  });
+  lyricsLookupQueue = task.catch(() => false);
+  const tracked = task.finally(() => lyricsLookupInFlight.delete(song.id));
+  lyricsLookupInFlight.set(song.id, tracked);
+  return tracked;
+}
+
 async function addFile(file, automaticLyrics = "") {
   const sourceKey = fileIdentity(file);
   const duplicate = songs.find(s => s.file && (s.sourceKey || fileIdentity(s.file)) === sourceKey);
   if (duplicate) {
     if (!duplicate.lyrics && automaticLyrics) {
       duplicate.lyrics = automaticLyrics;
+      duplicate.lyricsSource = "lrc";
       const stored = await dbPut(toRecord(duplicate));
       if (duplicate.id === currentId) renderLyrics(duplicate);
       return { added: false, stored, lyricsAdded: true };
     }
+    if (!duplicate.lyrics && settings.autoLyrics) requestOnlineLyrics(duplicate);
     return { added: false, stored: true, lyricsAdded: false };
   }
 
@@ -931,6 +1138,7 @@ async function addFile(file, automaticLyrics = "") {
     id: Date.now() + Math.random(),
     name: file.name.replace(/\.[^/.]+$/, ""),
     artist: "Arquivo local",
+    album: "",
     sourceKey,
     favorite: false,
     file: file,
@@ -940,6 +1148,11 @@ async function addFile(file, automaticLyrics = "") {
     playCount: 0,
     lastPlayed: 0,
     lyrics: automaticLyrics || "",
+    lyricsSource: automaticLyrics ? "lrc" : "",
+    lyricsSourceId: null,
+    lyricsSearchAt: 0,
+    lyricsRetryAt: 0,
+    lyricsRetryReason: "",
     seed: null
   };
 
@@ -955,9 +1168,11 @@ async function addFile(file, automaticLyrics = "") {
 
         if (tags.title) song.name = tags.title;
         if (tags.artist) song.artist = tags.artist;
+        if (tags.album) song.album = tags.album;
         const embeddedLyrics = lyricsFromTag(tags.lyrics);
         if (!song.lyrics && embeddedLyrics) {
           song.lyrics = embeddedLyrics;
+          song.lyricsSource = "embedded";
           if (song.id === currentId) renderLyrics(song);
         }
 
@@ -971,12 +1186,19 @@ async function addFile(file, automaticLyrics = "") {
 
         dbPut(toRecord(song));
         refreshAll();
+        if (!song.lyrics && settings.autoLyrics) requestOnlineLyrics(song);
         },
-        onError: () => refreshAll()
+        onError: () => {
+          refreshAll();
+          if (!song.lyrics && settings.autoLyrics) requestOnlineLyrics(song);
+        }
       });
     } catch {
       showToast("A música foi adicionada, mas não consegui ler suas informações.");
+      if (!song.lyrics && settings.autoLyrics) requestOnlineLyrics(song);
     }
+  } else if (!song.lyrics && settings.autoLyrics) {
+    requestOnlineLyrics(song);
   }
 
   return { added: true, stored, lyricsAdded: !!automaticLyrics };
@@ -1747,6 +1969,8 @@ function updateMiniPlayer() {
   $("nowTitle").textContent = song.name;
   $("nowArtist").textContent = song.artist;
   setCover($("nowCover"), song.cover);
+  $("nowLyrics").classList.toggle("has-lyrics", !!song.lyrics);
+  $("nowLyrics").setAttribute("aria-label", song.lyrics ? "Mostrar letra disponível" : "Abrir e buscar a letra");
 
   // animação da capa só quando a música muda
   if (lastMiniId !== null && lastMiniId !== song.id) {
@@ -1762,10 +1986,22 @@ function updateMiniPlayer() {
 attachRipple($("nowPlaying"));
 
 $("nowPlaying").addEventListener("click", e => {
-  if (e.target.closest("#nowPlay")) return;
+  if (e.target.closest("#nowPlay, #nowLyrics")) return;
 
   if (!current() && homeMain) playSong(homeMain.id, allIds());
   openFullPlayer();
+});
+
+$("nowLyrics").addEventListener("click", e => {
+  e.stopPropagation();
+  if (!current() && homeMain) playSong(homeMain.id, allIds());
+  const song = current();
+  if (!song) return;
+  lyricsView = true;
+  $("fpStage").classList.add("lyrics-on");
+  renderLyrics(song);
+  openFullPlayer();
+  if (!song.lyrics) requestOnlineLyrics(song, true);
 });
 
 $("nowPlay").addEventListener("click", e => {
@@ -2220,6 +2456,8 @@ function updateFullPlayer() {
   setIcon(rep, repeat === "one" ? "repeat_one" : "repeat");
 
   $("fpLyricsBtn").classList.toggle("on", lyricsView);
+  $("fpLyricsBtn").setAttribute("aria-pressed", String(lyricsView));
+  $("fpLyricsBtn").setAttribute("aria-label", lyricsView ? "Ocultar letra" : "Mostrar letra");
 
   // fundo desfocado com a capa
   $("fullPlayer").style.setProperty("--fp-bg", song.cover ? 'url("' + song.cover + '")' : "none");
@@ -2307,7 +2545,11 @@ $("fpLyricsBtn").onclick = () => {
   lyricsView = !lyricsView;
   $("fpStage").classList.toggle("lyrics-on", lyricsView);
   updateFullPlayer();
-  if (lyricsView) requestAnimationFrame(scrollLyricsToActive);
+  if (lyricsView) {
+    const song = current();
+    if (song && !song.lyrics) requestOnlineLyrics(song, true);
+    requestAnimationFrame(scrollLyricsToActive);
+  }
 };
 
 /* ==========================================================
@@ -2409,6 +2651,10 @@ function openSettings() {
   );
   sec.appendChild(
     switchRow("Inverter o gesto", "Troca a direção do arrastar entre as páginas", "swipeInvert")
+  );
+  sec.appendChild(el("div", "set-label", "Letras"));
+  sec.appendChild(
+    switchRow("Buscar letras automaticamente", "Consulta o LRCLIB usando título, artista e duração; o áudio não é enviado", "autoLyrics")
   );
 
   const nameRow = el("button", "set-row");
@@ -2937,16 +3183,39 @@ function renderLyrics(song) {
   if (!song || !song.lyrics) {
     const empty = el("div", "lrc-empty");
     empty.appendChild(el("span", "material-symbols-rounded", "lyrics"));
-    empty.appendChild(el("p", "", "Esta música ainda não tem letra."));
-
-    const btn = el("button", "tonal-btn");
-    btn.appendChild(el("span", "material-symbols-rounded", "upload_file"));
-    btn.appendChild(document.createTextNode("Importar .lrc"));
-    btn.onclick = () => {
-      if (song) pickLrcFor(song.id);
+    const state = lyricsLookupStatus.get(song && song.id);
+    const messages = {
+      searching: "Buscando letras online…",
+      "not-found": "Não encontramos uma letra correspondente.",
+      error: "Não foi possível buscar agora. Verifique a conexão e tente novamente.",
+      limited: "A busca está temporariamente limitada. Tente novamente mais tarde."
     };
+    const message = el("p", "", messages[state] || "Esta música ainda não tem letra.");
+    message.setAttribute("role", "status");
+    message.setAttribute("aria-live", "polite");
+    empty.appendChild(message);
 
-    empty.appendChild(btn);
+    if (state !== "searching") {
+      const actions = el("div", "lyrics-actions");
+      const searchBtn = el("button", "tonal-btn");
+      searchBtn.appendChild(el("span", "material-symbols-rounded", "search"));
+      searchBtn.appendChild(document.createTextNode("Buscar na internet"));
+      searchBtn.onclick = () => {
+        if (song) requestOnlineLyrics(song, true);
+      };
+      actions.appendChild(searchBtn);
+
+      const importBtn = el("button", "tonal-btn");
+      importBtn.appendChild(el("span", "material-symbols-rounded", "upload_file"));
+      importBtn.appendChild(document.createTextNode("Importar .lrc"));
+      importBtn.onclick = () => {
+        if (song) pickLrcFor(song.id);
+      };
+      actions.appendChild(importBtn);
+      empty.appendChild(actions);
+    }
+
+    empty.appendChild(el("small", "lyrics-search-note", "A busca envia apenas título, artista e álbum ao LRCLIB; o arquivo de áudio não é enviado."));
     box.appendChild(empty);
     return;
   }
@@ -2966,6 +3235,16 @@ function renderLyrics(song) {
 
     box.appendChild(p);
   });
+
+  if (song.lyricsSource === "lrclib") {
+    const source = el("a", "lyrics-source", "Letra encontrada pelo LRCLIB");
+    source.href = song.lyricsSourceId
+      ? "https://lrclib.net/api/get/" + encodeURIComponent(song.lyricsSourceId)
+      : "https://lrclib.net/";
+    source.target = "_blank";
+    source.rel = "noopener noreferrer";
+    box.appendChild(source);
+  }
 
   syncLyrics(audio.currentTime || 0);
 }
@@ -3024,6 +3303,8 @@ lrcInput.addEventListener("change", async () => {
 
   try {
     song.lyrics = await file.text();
+    song.lyricsSource = "lrc";
+    song.lyricsSourceId = null;
   } catch {
     showToast("Não consegui ler esse arquivo");
     return;
