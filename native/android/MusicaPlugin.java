@@ -20,6 +20,15 @@ public class MusicaPlugin extends Plugin {
 
     @Override
     public void load() {
+        MusicaPlaybackService.stateListener = (playing, positionMs, durationMs, playbackState, error) -> {
+            JSObject state = new JSObject();
+            state.put("playing", playing);
+            state.put("position", positionMs / 1000.0);
+            state.put("duration", durationMs / 1000.0);
+            state.put("playbackState", playbackState);
+            if (error != null) state.put("error", error);
+            notifyListeners("playerState", state);
+        };
         MusicaService.listener = (action, positionMs) -> {
             JSObject o = new JSObject();
             o.put("action", action);
@@ -167,6 +176,86 @@ public class MusicaPlugin extends Plugin {
         } catch (Exception e) {
             call.reject("Não foi possível excluir a cópia nativa: " + e.getMessage());
         }
+    }
+
+
+    private void sendPlaybackAction(String action, String key, long value) {
+        Intent intent = new Intent(getContext(), MusicaPlaybackService.class).setAction(action);
+        if (key != null) intent.putExtra(key, value);
+        getContext().startService(intent);
+    }
+
+    @PluginMethod
+    public void setTrack(PluginCall call) {
+        String path = call.getString("path");
+        if (path == null || path.trim().isEmpty()) {
+            call.reject("Caminho da música ausente.");
+            return;
+        }
+        try {
+            Intent intent = new Intent(getContext(), MusicaPlaybackService.class)
+                    .setAction(MusicaPlaybackService.ACTION_SET_TRACK)
+                    .putExtra("path", path)
+                    .putExtra("title", call.getString("title", "Música"))
+                    .putExtra("artist", call.getString("artist", ""))
+                    .putExtra("autoplay", call.getBoolean("autoplay", true));
+            ContextCompat.startForegroundService(getContext(), intent);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Não foi possível abrir a música no player Android: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void play(PluginCall call) {
+        MusicaPlaybackService service = MusicaPlaybackService.instance;
+        if (service != null) service.onStartCommand(new Intent(getContext(), MusicaPlaybackService.class)
+                .setAction(MusicaPlaybackService.ACTION_PLAY), 0, 0);
+        else {
+            try { ContextCompat.startForegroundService(getContext(),
+                    new Intent(getContext(), MusicaPlaybackService.class).setAction(MusicaPlaybackService.ACTION_PLAY)); }
+            catch (Exception e) { call.reject("Não foi possível iniciar a reprodução: " + e.getMessage()); return; }
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void pause(PluginCall call) {
+        MusicaPlaybackService service = MusicaPlaybackService.instance;
+        if (service != null) service.onStartCommand(new Intent(getContext(), MusicaPlaybackService.class)
+                .setAction(MusicaPlaybackService.ACTION_PAUSE), 0, 0);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void seekTo(PluginCall call) {
+        double seconds = call.getDouble("position", 0.0);
+        MusicaPlaybackService service = MusicaPlaybackService.instance;
+        if (service != null) service.onStartCommand(new Intent(getContext(), MusicaPlaybackService.class)
+                .setAction(MusicaPlaybackService.ACTION_SEEK)
+                .putExtra("position", Math.max(0L, (long) (seconds * 1000))), 0, 0);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setRate(PluginCall call) {
+        double rate = call.getDouble("rate", 1.0);
+        MusicaPlaybackService service = MusicaPlaybackService.instance;
+        if (service != null) service.onStartCommand(new Intent(getContext(), MusicaPlaybackService.class)
+                .setAction(MusicaPlaybackService.ACTION_RATE)
+                .putExtra("rate", (float) rate), 0, 0);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void stopPlayback(PluginCall call) {
+        MusicaPlaybackService service = MusicaPlaybackService.instance;
+        if (service != null) {
+            service.onStartCommand(new Intent(getContext(), MusicaPlaybackService.class)
+                    .setAction(MusicaPlaybackService.ACTION_PAUSE), 0, 0);
+            service.stopSelf();
+        }
+        call.resolve();
     }
 
     @PluginMethod
