@@ -209,21 +209,15 @@ public class MusicaPlugin extends Plugin {
     @PluginMethod
     public void play(PluginCall call) {
         MusicaPlaybackService service = MusicaPlaybackService.instance;
-        if (service != null) service.onStartCommand(new Intent(getContext(), MusicaPlaybackService.class)
-                .setAction(MusicaPlaybackService.ACTION_PLAY), 0, 0);
-        else {
-            try { ContextCompat.startForegroundService(getContext(),
-                    new Intent(getContext(), MusicaPlaybackService.class).setAction(MusicaPlaybackService.ACTION_PLAY)); }
-            catch (Exception e) { call.reject("Não foi possível iniciar a reprodução: " + e.getMessage()); return; }
-        }
+        if (service == null) { call.reject("Nenhuma música foi carregada no player Android."); return; }
+        service.playNow();
         call.resolve();
     }
 
     @PluginMethod
     public void pause(PluginCall call) {
         MusicaPlaybackService service = MusicaPlaybackService.instance;
-        if (service != null) service.onStartCommand(new Intent(getContext(), MusicaPlaybackService.class)
-                .setAction(MusicaPlaybackService.ACTION_PAUSE), 0, 0);
+        if (service != null) service.pauseNow();
         call.resolve();
     }
 
@@ -231,9 +225,7 @@ public class MusicaPlugin extends Plugin {
     public void seekTo(PluginCall call) {
         double seconds = call.getDouble("position", 0.0);
         MusicaPlaybackService service = MusicaPlaybackService.instance;
-        if (service != null) service.onStartCommand(new Intent(getContext(), MusicaPlaybackService.class)
-                .setAction(MusicaPlaybackService.ACTION_SEEK)
-                .putExtra("position", Math.max(0L, (long) (seconds * 1000))), 0, 0);
+        if (service != null) service.seekNow(Math.max(0L, (long) (seconds * 1000)));
         call.resolve();
     }
 
@@ -241,9 +233,7 @@ public class MusicaPlugin extends Plugin {
     public void setRate(PluginCall call) {
         double rate = call.getDouble("rate", 1.0);
         MusicaPlaybackService service = MusicaPlaybackService.instance;
-        if (service != null) service.onStartCommand(new Intent(getContext(), MusicaPlaybackService.class)
-                .setAction(MusicaPlaybackService.ACTION_RATE)
-                .putExtra("rate", (float) rate), 0, 0);
+        if (service != null) service.setRateNow((float) rate);
         call.resolve();
     }
 
@@ -251,9 +241,7 @@ public class MusicaPlugin extends Plugin {
     public void stopPlayback(PluginCall call) {
         MusicaPlaybackService service = MusicaPlaybackService.instance;
         if (service != null) {
-            service.onStartCommand(new Intent(getContext(), MusicaPlaybackService.class)
-                    .setAction(MusicaPlaybackService.ACTION_PAUSE), 0, 0);
-            service.stopSelf();
+            service.stopNow();
         }
         call.resolve();
     }
