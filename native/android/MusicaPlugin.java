@@ -10,8 +10,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.DocumentsContract;
 
-import com.getcapacitor.ActivityCallback;
-import com.getcapacitor.ActivityResult;
+import androidx.activity.result.ActivityResult;
+import com.getcapacitor.annotation.ActivityCallback;
 
 import androidx.core.content.ContextCompat;
 import androidx.media3.common.MediaItem;
