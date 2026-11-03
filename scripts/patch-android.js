@@ -21,6 +21,7 @@ for (const f of fs.readdirSync(srcDir).filter(n => n.endsWith(".java"))) {
 
 let xml = fs.readFileSync(manifestPath, "utf8");
 const missingPermissions = [
+  "android.permission.INTERNET",
   "android.permission.FOREGROUND_SERVICE",
   "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
   "android.permission.POST_NOTIFICATIONS",
