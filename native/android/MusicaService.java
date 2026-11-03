@@ -219,9 +219,9 @@ public class MusicaService extends Service {
 
     @Override
     public void onTaskRemoved(Intent rootIntent) {
-        // app removido dos recentes: pausa o áudio e encerra o serviço
-        dispatch("pause", -1);
-        main.postDelayed(this::stopSelf, 300);
+        // Não pausar nem encerrar aqui: o serviço em primeiro plano deve poder
+        // continuar ativo quando o usuário remove a tela do app dos recentes.
+        // O serviço só libera recursos quando a reprodução é pausada ou encerrada.
         super.onTaskRemoved(rootIntent);
     }
 
