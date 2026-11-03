@@ -298,7 +298,8 @@ function makeSong(r) {
 /* ==========================================================
    Estado
    ========================================================== */
-const audio = $("audio");
+const htmlAudio = $("audio");
+const audio = nativePlayback ? createNativeAudioBridge(MN) : htmlAudio;
 const fileInput = $("fileInput");
 const lrcInput = $("lrcInput");
 
@@ -2155,7 +2156,7 @@ function updatePlayButtons() {
 /* ==========================================================
    Reprodução
    ========================================================== */
-function playSong(id, context, back) {
+async function playSong(id, context, back) {
   const song = getSong(id);
   if (!song) return;
 
@@ -2172,8 +2173,18 @@ function playSong(id, context, back) {
   song.lastPlayed = Date.now();
   dbPut(toRecord(song));
 
-  audio.src = song.url;
-  playAudio();
+  try {
+    if (nativePlayback) {
+      if (!song.nativePath) await ensureNativeCopy(song);
+      if (!song.nativePath) throw new Error("Não foi possível preparar esta música para o player Android.");
+      await audio.setTrack(song);
+    } else {
+      audio.src = song.url;
+      playAudio();
+    }
+  } catch (error) {
+    notifyPlaybackProblem(error && error.message ? error.message : "Não foi possível abrir esta música.");
+  }
 
   onSongChanged();
 }
@@ -2332,6 +2343,8 @@ audio.addEventListener("playing", () => {
 /* ----- Reprodução em segundo plano (só no app Android) -----
    No APK, o plugin nativo "MusicaNative" mantém um serviço em primeiro plano com a
    notificação de mídia. No navegador/PWA ele não existe e nada disso roda. */
+
+
 const MN = (() => {
   try {
     const C = window.Capacitor;
@@ -2342,6 +2355,122 @@ const MN = (() => {
   return null;
 })();
 
+const nativePlayback = !!(MN && MN.setTrack && MN.play && MN.pause && MN.seekTo);
+
+function createNativeAudioBridge(plugin) {
+  const listeners = new Map();
+  const state = { paused: true, currentTime: 0, duration: 0, playbackRate: 1, error: null, src: "" };
+  let endedSent = false;
+
+  function emit(type) {
+    const event = new Event(type);
+    const callbacks = listeners.get(type);
+    if (callbacks) Array.from(callbacks).forEach(fn => {
+      try { fn.call(audio, event); } catch (error) { console.warn(error); }
+    });
+  }
+
+  const audio = {
+    addEventListener(type, callback) {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type).add(callback);
+    },
+    removeEventListener(type, callback) {
+      const callbacks = listeners.get(type);
+      if (callbacks) callbacks.delete(callback);
+    },
+    async setTrack(song) {
+      if (!song || !song.nativePath) throw new Error("A música ainda não foi copiada para o armazenamento do Android.");
+      state.src = song.nativePath;
+      state.currentTime = 0;
+      state.duration = 0;
+      state.error = null;
+      endedSent = false;
+      await plugin.setTrack({
+        path: song.nativePath,
+        title: song.name || "Música",
+        artist: song.artist || "",
+        autoplay: true
+      });
+    },
+    async play() {
+      try {
+        await plugin.play();
+        state.paused = false;
+        emit("play");
+        emit("playing");
+      } catch (error) {
+        state.paused = true;
+        emit("pause");
+        throw error;
+      }
+    },
+    pause() {
+      plugin.pause().catch(() => {});
+      if (!state.paused) {
+        state.paused = true;
+        emit("pause");
+      }
+    },
+    removeAttribute(name) {
+      if (name === "src") {
+        if (plugin.stopPlayback) plugin.stopPlayback().catch(() => {});
+        state.src = "";
+        state.currentTime = 0;
+        state.duration = 0;
+        state.paused = true;
+        emit("pause");
+        emit("timeupdate");
+      }
+    },
+    load() {},
+    get paused() { return state.paused; },
+    get currentTime() { return state.currentTime; },
+    set currentTime(value) {
+      const next = Math.max(0, Number(value) || 0);
+      state.currentTime = next;
+      plugin.seekTo({ position: next }).catch(() => {});
+      emit("seeked");
+      emit("timeupdate");
+    },
+    get duration() { return state.duration; },
+    get playbackRate() { return state.playbackRate; },
+    set playbackRate(value) {
+      const rate = Number(value) || 1;
+      state.playbackRate = rate;
+      if (plugin.setRate) plugin.setRate({ rate }).catch(() => {});
+    },
+    get error() { return state.error; },
+    get src() { return state.src; },
+    set src(value) { state.src = String(value || ""); }
+  };
+
+  if (plugin.addListener) {
+    plugin.addListener("playerState", event => {
+      const wasPaused = state.paused;
+      state.paused = !event.playing;
+      state.currentTime = Math.max(0, Number(event.position) || 0);
+      state.duration = Math.max(0, Number(event.duration) || 0);
+      if (event.error) state.error = { code: 3, message: event.error };
+      else state.error = null;
+      if (wasPaused !== state.paused) emit(state.paused ? "pause" : "play");
+      if (!state.paused) emit("playing");
+      if (state.duration > 0) emit("loadedmetadata");
+      emit("durationchange");
+      emit("timeupdate");
+      if (event.playbackState === 4 && !endedSent) {
+        endedSent = true;
+        state.paused = true;
+        emit("pause");
+        emit("ended");
+      } else if (event.playbackState !== 4) {
+        endedSent = false;
+      }
+    });
+  }
+
+  return audio;
+}
 
 function nativeMediaSession() {
   return MN;
@@ -2401,7 +2530,7 @@ let nativeCoverDirty = false;
 let nativeAskedNotif = false;
 
 function sendNative() {
-  if (!MN) return;
+  if (!MN || nativePlayback) return;
   const payload = {
     title: nativeState.title,
     artist: nativeState.artist,
@@ -2444,7 +2573,7 @@ function nativeCoverFor(song) {
 }
 
 function callNativeMedia(method, payload) {
-  if (!MN) return;
+  if (!MN || nativePlayback) return;
 
   if (method === "setMetadata") {
     nativeState.title = payload.title;
@@ -2477,7 +2606,7 @@ function callNativeMedia(method, payload) {
 }
 
 // botões da notificação, da tela de bloqueio e dos fones
-if (MN && MN.addListener) {
+if (MN && MN.addListener && !nativePlayback) {
   MN.addListener("action", e => {
     switch (e && e.action) {
       case "play":
@@ -2575,6 +2704,7 @@ function notifyPlayRejected(error) {
 }
 
 function initMediaSessionHandlers() {
+  if (nativePlayback) return;
   const hasWeb = "mediaSession" in navigator;
   if (!hasWeb) return;
 
