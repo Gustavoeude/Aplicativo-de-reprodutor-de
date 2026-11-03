@@ -401,6 +401,7 @@ class NativeAudio {
     this.loadedId = id;
     this._ended = false;
     this._gotDuration = false;
+    this.error = null;
     this._pos = 0;
     this._posAt = 0;
     this.duration = NaN;
@@ -409,16 +410,21 @@ class NativeAudio {
   }
   // recebe o estado do player nativo
   apply(st) {
-    if (this.loadedId === null || String(this.loadedId) !== String(st.id)) return;
-    const wasPaused = this.paused;
-    if (st.state === 3 || st.playing) lsSet("nativeFail", 0); // tocou de verdade: zera a proteção
+    if (!st) return;
 
+    // Erros de inicialização podem chegar sem ID de faixa. Tratar antes da
+    // validação evita deixar a interface presa em "Preparando a música".
     if (st.error) {
+      if (st.id && this.loadedId !== null && String(this.loadedId) !== String(st.id)) return;
       this.error = { code: 3 };
       this._emit("error");
       this.setPlaying(false);
       return;
     }
+
+    if (this.loadedId === null || String(this.loadedId) !== String(st.id)) return;
+    const wasPaused = this.paused;
+    if (st.state === 3 || st.playing) lsSet("nativeFail", 0); // tocou de verdade: zera a proteção
 
     const dur = st.duration > 0 ? st.duration / 1000 : NaN;
     if (!(isNaN(dur) && isNaN(this.duration)) && dur !== this.duration) {
@@ -2690,7 +2696,12 @@ async function nativeStart(song, autoplay) {
   try {
     const item = await nativeItem(song);
     if (token !== nativeToken) return;
-    await MN.setQueue({ items: [item], autoplay, position: 0, repeatOne: repeat === "one" });
+    await MN.setQueue({
+      items: [item],
+      autoplay,
+      position: 0,
+      repeatOne: repeat === "one" || (repeat === "all" && queue.length === 1)
+    });
     nativeRefreshUpcoming();
   } catch (e) {
     if (token !== nativeToken) return;
@@ -2738,7 +2749,7 @@ async function nativePushUpcoming() {
   if (!cur) return;
   const startId = currentId;
   try {
-    if (repeat === "one") {
+    if (repeat === "one" || (repeat === "all" && queue.length === 1)) {
       await MN.setUpcoming({ afterId: String(startId), items: [], repeatOne: true });
       return;
     }
