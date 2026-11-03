@@ -294,9 +294,168 @@ function makeSong(r) {
 }
 
 /* ==========================================================
+   Player nativo (Android): Media3/ExoPlayer, sem depender do WebView
+   ========================================================== */
+const MN = (() => {
+  try {
+    const C = window.Capacitor;
+    if (C && C.isNativePlatform && C.isNativePlatform()) {
+      return C.registerPlugin ? C.registerPlugin("MusicaNative") : C.Plugins && C.Plugins.MusicaNative;
+    }
+  } catch (_) {}
+  return null;
+})();
+
+// Proteção: se o app falhar 2 vezes ao começar a tocar no player nativo, ele se desliga sozinho.
+let nativeAutoDisabled = false;
+const nativeMode = (() => {
+  if (!MN) return false;
+  try {
+    const saved = lsGet("settings", {});
+    if (saved.nativePlayer === false) return false;
+    if (lsGet("nativeFail", 0) >= 2) {
+      saved.nativePlayer = false;
+      lsSet("settings", saved);
+      lsSet("nativeFail", 0);
+      nativeAutoDisabled = true;
+      return false;
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+})();
+
+// Imita a parte do <audio> que o app usa, para o resto do código não precisar mudar.
+class NativeAudio {
+  constructor() {
+    this._l = {};
+    this.paused = true;
+    this._pos = 0;
+    this._posAt = 0;
+    this.duration = NaN;
+    this.playbackRate = 1;
+    this.defaultPlaybackRate = 1;
+    this.volume = 1;
+    this.error = null;
+    this.readyState = 0;
+    this.loadedId = null;
+    this._ended = false;
+    this._gotDuration = false;
+  }
+  addEventListener(type, fn) { (this._l[type] = this._l[type] || []).push(fn); }
+  removeEventListener(type, fn) { this._l[type] = (this._l[type] || []).filter(f => f !== fn); }
+  _emit(type) {
+    (this._l[type] || []).slice().forEach(fn => {
+      try { fn.call(this, { type, target: this }); } catch (e) { console.error(e); }
+    });
+  }
+  get currentTime() {
+    if (!this.paused && this._posAt) return this._pos + ((performance.now() - this._posAt) / 1000) * (this.playbackRate || 1);
+    return this._pos;
+  }
+  set currentTime(v) {
+    v = Math.max(0, Number(v) || 0);
+    this._pos = v;
+    this._posAt = this.paused ? 0 : performance.now();
+    try { MN.seek({ position: v * 1000 }); } catch (_) {}
+    setTimeout(() => this._emit("seeked"), 0);
+    this._emit("timeupdate");
+  }
+  get src() { return ""; }
+  set src(_) {} // no modo nativo quem escolhe a música é nativeStart()
+  load() {}
+  removeAttribute() {
+    try { MN.stopPlayer(); } catch (_) {}
+    this.loadedId = null;
+    this._pos = 0;
+    this._posAt = 0;
+    this.duration = NaN;
+    this.setPlaying(false);
+  }
+  play() {
+    if (this.loadedId !== null) {
+      this.setPlaying(true);
+      try { MN.play(); } catch (_) {}
+    }
+    return Promise.resolve();
+  }
+  pause() {
+    this.setPlaying(false);
+    try { if (this.loadedId !== null) MN.pause(); } catch (_) {}
+  }
+  setPlaying(on) {
+    if (on && this.paused) {
+      this.paused = false;
+      this._posAt = performance.now();
+      this._emit("play");
+      this._emit("playing");
+    } else if (!on && !this.paused) {
+      this._pos = this.currentTime;
+      this.paused = true;
+      this._posAt = 0;
+      this._emit("pause");
+    }
+  }
+  beginLoad(id, autoplay) {
+    this.loadedId = id;
+    this._ended = false;
+    this._gotDuration = false;
+    this._pos = 0;
+    this._posAt = 0;
+    this.duration = NaN;
+    this._emit("loadstart");
+    this.setPlaying(autoplay);
+  }
+  // recebe o estado do player nativo
+  apply(st) {
+    if (this.loadedId === null || String(this.loadedId) !== String(st.id)) return;
+    const wasPaused = this.paused;
+    if (st.state === 3 || st.playing) lsSet("nativeFail", 0); // tocou de verdade: zera a proteção
+
+    if (st.error) {
+      this.error = { code: 3 };
+      this._emit("error");
+      this.setPlaying(false);
+      return;
+    }
+
+    const dur = st.duration > 0 ? st.duration / 1000 : NaN;
+    if (!(isNaN(dur) && isNaN(this.duration)) && dur !== this.duration) {
+      this.duration = dur;
+      if (!this._gotDuration && !isNaN(dur)) {
+        this._gotDuration = true;
+        this._emit("loadedmetadata");
+      }
+      this._emit("durationchange");
+    }
+
+    this._pos = Math.max(0, st.position / 1000);
+    this.playbackRate = st.rate || 1;
+
+    if (st.state === 4) {
+      // fim da fila nativa
+      this._pos = isNaN(dur) ? this._pos : dur;
+      this.setPlaying(false);
+      this._emit("timeupdate");
+      if (!this._ended) {
+        this._ended = true;
+        this._emit("ended");
+      }
+      return;
+    }
+
+    this._ended = false;
+    this.setPlaying(!!st.playing);
+    this._posAt = this.paused ? 0 : performance.now();
+    if (!wasPaused || !this.paused) this._emit("timeupdate");
+  }
+}
+
+/* ==========================================================
    Estado
    ========================================================== */
-const audio = $("audio");
+const audio = nativeMode ? new NativeAudio() : $("audio");
 const fileInput = $("fileInput");
 const lrcInput = $("lrcInput");
 
@@ -317,7 +476,7 @@ let homeMain = null;
 let lrcTargetId = null;
 let seed = { h: 215, s: 0.8 };
 let settings = Object.assign(
-  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false, font: "roboto", autoLyrics: true, autoCovers: true },
+  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false, font: "roboto", autoLyrics: true, autoCovers: true, nativePlayer: true },
   lsGet("settings", {})
 );
 if (!settings.shapes || typeof settings.shapes !== "object") settings.shapes = {};
@@ -1518,6 +1677,7 @@ async function deleteSong(song) {
   playHistory = playHistory.filter(id => id !== song.id);
   const deletedFromStorage = await dbDelete(song.id);
 
+  nativeRefreshUpcoming();
   refreshAll();
   showToast(deletedFromStorage
     ? "Música excluída"
@@ -2166,8 +2326,11 @@ function playSong(id, context, back) {
   song.lastPlayed = Date.now();
   dbPut(toRecord(song));
 
-  audio.src = song.url;
-  playAudio();
+  if (nativeMode) nativeStart(song, true);
+  else {
+    audio.src = song.url;
+    playAudio();
+  }
 
   onSongChanged();
 }
@@ -2326,16 +2489,6 @@ audio.addEventListener("playing", () => {
 /* ----- Reprodução em segundo plano (só no app Android) -----
    No APK, o plugin nativo "MusicaNative" mantém um serviço em primeiro plano com a
    notificação de mídia. No navegador/PWA ele não existe e nada disso roda. */
-const MN = (() => {
-  try {
-    const C = window.Capacitor;
-    if (C && C.isNativePlatform && C.isNativePlatform()) {
-      return C.registerPlugin ? C.registerPlugin("MusicaNative") : C.Plugins && C.Plugins.MusicaNative;
-    }
-  } catch (_) {}
-  return null;
-})();
-
 function nativeMediaSession() {
   return MN;
 }
@@ -2392,7 +2545,7 @@ function nativeCoverFor(song) {
 }
 
 function callNativeMedia(method, payload) {
-  if (!MN) return;
+  if (!MN || nativeMode) return;
 
   if (method === "setMetadata") {
     nativeState.title = payload.title;
@@ -2448,6 +2601,198 @@ if (MN && MN.addListener) {
         }
         break;
     }
+  });
+}
+
+/* ----- Player nativo: copiar arquivos, fila e eventos ----- */
+const nativeFiles = new Map(); // id -> { path, size }
+const nativeCopyJobs = new Map();
+const nativeCovers = new Map(); // id -> { url, path }
+const NATIVE_CACHE_BYTES = 2e9; // limite de espaço das músicas copiadas
+let nativeToken = 0;
+let nativeUpTimer = 0;
+
+function nativeExt(file) {
+  const m = /\.([a-z0-9]{1,5})$/i.exec((file && file.name) || "");
+  return m ? m[1].toLowerCase() : "audio";
+}
+
+function blobToB64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const t = String(r.result);
+      resolve(t.slice(t.indexOf(",") + 1));
+    };
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+// copia a música para a pasta privada do app (só na primeira vez; depois reaproveita)
+function nativeEnsureFile(song) {
+  const key = String(song.id);
+  const known = nativeFiles.get(key);
+  if (known && known.size === song.file.size) return Promise.resolve(known);
+  if (nativeCopyJobs.has(key)) return nativeCopyJobs.get(key);
+
+  const job = (async () => {
+    const size = song.file.size;
+    const ext = nativeExt(song.file);
+    const has = await MN.hasFile({ id: key, ext, size });
+    if (has && has.exists) {
+      const info = { path: has.path, size };
+      nativeFiles.set(key, info);
+      return info;
+    }
+    const CHUNK = 768 * 1024;
+    let off = 0;
+    let last = null;
+    do {
+      const end = Math.min(size, off + CHUNK);
+      const data = await blobToB64(song.file.slice(off, end));
+      last = await MN.writeChunk({ id: key, ext, data, first: off === 0, done: end >= size });
+      off = end;
+    } while (off < size);
+    const info = { path: last.path, size };
+    nativeFiles.set(key, info);
+    return info;
+  })().finally(() => nativeCopyJobs.delete(key));
+
+  nativeCopyJobs.set(key, job);
+  return job;
+}
+
+async function nativeEnsureCover(song) {
+  if (!song.cover) return "";
+  const key = String(song.id);
+  const c = nativeCovers.get(key);
+  if (c && c.url === song.cover) return c.path;
+  const b64 = await nativeCoverFor(song);
+  if (!b64) return "";
+  const r = await MN.putCover({ id: key, data: b64 });
+  nativeCovers.set(key, { url: song.cover, path: r.path });
+  return r.path;
+}
+
+async function nativeItem(song) {
+  const info = await nativeEnsureFile(song);
+  let cover = "";
+  try { cover = await nativeEnsureCover(song); } catch (_) {}
+  return { id: String(song.id), path: info.path, title: song.name || "Música", artist: song.artist || "", cover };
+}
+
+async function nativeStart(song, autoplay) {
+  const token = ++nativeToken;
+  lsSet("nativeFail", (lsGet("nativeFail", 0) || 0) + 1);
+  audio.beginLoad(song.id, autoplay);
+  const slow = setTimeout(() => showToast("Preparando a música…"), 700);
+  try {
+    const item = await nativeItem(song);
+    if (token !== nativeToken) return;
+    await MN.setQueue({ items: [item], autoplay, position: 0, repeatOne: repeat === "one" });
+    nativeRefreshUpcoming();
+  } catch (e) {
+    if (token !== nativeToken) return;
+    console.error(e);
+    lsSet("nativeFail", 0); // falha tratada (sem travar o app) não conta para a proteção
+    audio.pause();
+    notifyPlaybackProblem("Não consegui preparar esta música para o player nativo.");
+  } finally {
+    clearTimeout(slow);
+  }
+}
+
+// as próximas músicas ficam na fila do player nativo: tocam mesmo com o app congelado
+function upcomingIds(n) {
+  if (!queue.length || currentId === null) return [];
+  if (shuffle) {
+    const pool = queue.filter(id => id !== currentId);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, n);
+  }
+  const idx = queue.indexOf(currentId);
+  const out = [];
+  for (let k = 1; k <= n; k++) {
+    let i = idx === -1 ? k - 1 : idx + k;
+    if (i >= queue.length) {
+      if (repeat === "all") i = i % queue.length;
+      else break;
+    }
+    out.push(queue[i]);
+  }
+  return out;
+}
+
+function nativeRefreshUpcoming() {
+  if (!nativeMode) return;
+  clearTimeout(nativeUpTimer);
+  nativeUpTimer = setTimeout(nativePushUpcoming, 250);
+}
+
+async function nativePushUpcoming() {
+  const cur = current();
+  if (!cur) return;
+  const startId = currentId;
+  try {
+    if (repeat === "one") {
+      await MN.setUpcoming({ afterId: String(startId), items: [], repeatOne: true });
+      return;
+    }
+    const ids = upcomingIds(5);
+    const items = [];
+    for (const id of ids) {
+      const s = getSong(id);
+      if (!s || !s.file) continue;
+      items.push(await nativeItem(s));
+      if (currentId !== startId) return; // a música mudou no meio: um novo envio já foi agendado
+    }
+    await MN.setUpcoming({ afterId: String(startId), items, repeatOne: false });
+    MN.trim({ maxBytes: NATIVE_CACHE_BYTES, keep: [startId, ...ids].map(String) });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// o player nativo passou sozinho para outra música (ou o app acordou depois de congelar)
+function onNativeTransition(idStr, silent) {
+  const song = songs.find(s => String(s.id) === String(idStr));
+  if (!song || song.id === currentId) return;
+  if (currentId !== null) {
+    playHistory.push(currentId);
+    if (playHistory.length > 50) playHistory.shift();
+  }
+  if (!queue.includes(song.id)) queue = allIds();
+  currentId = song.id;
+  if (!silent) {
+    song.playCount += 1;
+    song.lastPlayed = Date.now();
+    dbPut(toRecord(song));
+  }
+  audio.loadedId = song.id;
+  audio._ended = false;
+  audio._gotDuration = false;
+  onSongChanged();
+  nativeRefreshUpcoming();
+}
+
+async function nativeResync(silent) {
+  try {
+    const st = await MN.getState();
+    if (!st || !st.id) return;
+    if (String(st.id) !== String(currentId)) onNativeTransition(st.id, silent);
+    audio.apply(st);
+  } catch (_) {}
+}
+
+if (nativeMode) {
+  MN.addListener("state", st => audio.apply(st));
+  MN.addListener("transition", e => onNativeTransition(e && e.id));
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) nativeResync(false);
   });
 }
 
@@ -2765,12 +3110,14 @@ $("fpFav").onclick = () => {
 
 $("fpShuffle").onclick = () => {
   shuffle = !shuffle;
+  nativeRefreshUpcoming();
   updateFullPlayer();
   showToast(shuffle ? "Aleatório ligado" : "Aleatório desligado");
 };
 
 $("fpRepeat").onclick = () => {
   repeat = repeat === "off" ? "all" : repeat === "all" ? "one" : "off";
+  nativeRefreshUpcoming();
   updateFullPlayer();
   showToast(
     repeat === "off"
@@ -2904,6 +3251,12 @@ function openSettings() {
   sec.appendChild(
     switchRow("Buscar capas automaticamente", "Consulta a iTunes usando título e artista ao importar; o áudio não é enviado", "autoCovers")
   );
+  if (MN) {
+    sec.appendChild(el("div", "set-label", "Reprodução"));
+    sec.appendChild(
+      switchRow("Player nativo (segundo plano mais estável)", "Toca pelo Android, mesmo com o app congelado. Feche e abra o app depois de mudar.", "nativePlayer")
+    );
+  }
 
   const nameRow = el("button", "set-row");
   const nameText = el("div", "set-row-text");
@@ -3620,6 +3973,8 @@ setTimeout(() => $("homePage").classList.remove("stagger"), 1100);
 loadSongs().then(() => {
   refreshAll();
   maybeAskPermissionsFirstRun();
+  if (nativeMode) nativeResync(true); // se o player nativo já estava tocando, acompanha
+  if (nativeAutoDisabled) setTimeout(() => showToast("O player nativo foi desligado depois de falhas. Dá para religar nos Ajustes."), 1500);
 });
 
 /* ==========================================================

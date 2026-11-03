@@ -7,7 +7,21 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 
 import androidx.core.content.ContextCompat;
+import androidx.media3.common.MediaItem;
 
+import org.json.JSONArray;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import android.util.Base64;
+
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -20,6 +34,7 @@ public class MusicaPlugin extends Plugin {
 
     @Override
     public void load() {
+        MusicaPlaybackService.sink = (name, data) -> notifyListeners(name, data);
         MusicaService.listener = (action, positionMs) -> {
             JSObject o = new JSObject();
             o.put("action", action);
@@ -69,5 +84,209 @@ public class MusicaPlugin extends Plugin {
             }
         } catch (Exception ignored) {}
         call.resolve();
+    }
+
+    // ================= player nativo (Media3) =================
+    private File audioDir() {
+        File d = new File(getContext().getFilesDir(), "musica-audio");
+        if (!d.exists()) d.mkdirs();
+        return d;
+    }
+
+    private static String safe(String id) {
+        return id == null ? "x" : id.replaceAll("[^0-9A-Za-z._-]", "_");
+    }
+
+    private static String cleanExt(String ext) {
+        String e = ext == null ? "" : ext.replaceAll("[^0-9A-Za-z]", "");
+        return e.isEmpty() || e.length() > 5 ? "audio" : e.toLowerCase();
+    }
+
+    /** Diz se o arquivo da música já está copiado (e com o tamanho certo). */
+    @PluginMethod
+    public void hasFile(PluginCall call) {
+        try {
+            File f = new File(audioDir(), safe(call.getString("id")) + "." + cleanExt(call.getString("ext")));
+            long size = (long) (double) call.getDouble("size", 0.0);
+            JSObject r = new JSObject();
+            boolean ok = f.isFile() && (size <= 0 || f.length() == size);
+            r.put("exists", ok);
+            r.put("path", f.getAbsolutePath());
+            if (ok) f.setLastModified(System.currentTimeMillis());
+            call.resolve(r);
+        } catch (Exception e) {
+            call.reject("hasFile: " + e.getMessage());
+        }
+    }
+
+    /** Recebe a música em pedaços (base64) e grava na pasta privada do app. */
+    @PluginMethod
+    public void writeChunk(PluginCall call) {
+        try {
+            String id = safe(call.getString("id"));
+            File part = new File(audioDir(), id + ".part");
+            boolean first = Boolean.TRUE.equals(call.getBoolean("first", false));
+            boolean done = Boolean.TRUE.equals(call.getBoolean("done", false));
+            byte[] bytes = Base64.decode(call.getString("data", ""), Base64.DEFAULT);
+            try (FileOutputStream out = new FileOutputStream(part, !first)) {
+                out.write(bytes);
+            }
+            JSObject r = new JSObject();
+            if (done) {
+                File dest = new File(audioDir(), id + "." + cleanExt(call.getString("ext")));
+                if (dest.exists()) dest.delete();
+                if (!part.renameTo(dest)) throw new java.io.IOException("não consegui finalizar o arquivo");
+                r.put("path", dest.getAbsolutePath());
+                r.put("size", dest.length());
+            }
+            call.resolve(r);
+        } catch (Exception e) {
+            call.reject("writeChunk: " + e.getMessage());
+        }
+    }
+
+    /** Guarda a capa (JPEG em base64) para a notificação. */
+    @PluginMethod
+    public void putCover(PluginCall call) {
+        try {
+            File dir = new File(audioDir(), "covers");
+            if (!dir.exists()) dir.mkdirs();
+            File f = new File(dir, safe(call.getString("id")) + ".jpg");
+            byte[] bytes = Base64.decode(call.getString("data", ""), Base64.DEFAULT);
+            try (FileOutputStream out = new FileOutputStream(f, false)) {
+                out.write(bytes);
+            }
+            JSObject r = new JSObject();
+            r.put("path", f.getAbsolutePath());
+            call.resolve(r);
+        } catch (Exception e) {
+            call.reject("putCover: " + e.getMessage());
+        }
+    }
+
+    /** Mantém a pasta abaixo de maxBytes apagando as músicas copiadas há mais tempo. */
+    @PluginMethod
+    public void trim(PluginCall call) {
+        try {
+            long max = (long) (double) call.getDouble("maxBytes", 2.0e9);
+            Set<String> keep = new HashSet<>();
+            JSArray k = call.getArray("keep");
+            if (k != null) for (int i = 0; i < k.length(); i++) keep.add(safe(k.optString(i)));
+            File[] files = audioDir().listFiles(File::isFile);
+            long total = 0;
+            List<File> list = new ArrayList<>();
+            if (files != null) {
+                for (File f : files) {
+                    total += f.length();
+                    list.add(f);
+                }
+            }
+            list.sort((a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+            int removed = 0;
+            for (File f : list) {
+                if (total <= max) break;
+                String base = f.getName().replaceAll("\\.[^.]*$", "");
+                if (keep.contains(base) || f.getName().endsWith(".part")) continue;
+                total -= f.length();
+                if (f.delete()) removed++;
+            }
+            JSObject r = new JSObject();
+            r.put("removed", removed);
+            r.put("bytes", total);
+            call.resolve(r);
+        } catch (Exception e) {
+            call.reject("trim: " + e.getMessage());
+        }
+    }
+
+    private List<MediaItem> items(PluginCall call) {
+        try {
+            JSArray arr = call.getArray("items");
+            return MusicaPlaybackService.buildItems(arr == null ? new JSONArray() : arr);
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+
+    @PluginMethod
+    public void setQueue(PluginCall call) {
+        final List<MediaItem> list = items(call);
+        final boolean autoplay = Boolean.TRUE.equals(call.getBoolean("autoplay", true));
+        final long pos = (long) (double) call.getDouble("position", 0.0);
+        final boolean one = Boolean.TRUE.equals(call.getBoolean("repeatOne", false));
+        MusicaPlaybackService.run(getContext(), s -> s.setQueue(list, autoplay, pos, one));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setUpcoming(PluginCall call) {
+        final List<MediaItem> list = items(call);
+        final String after = call.getString("afterId", "");
+        final boolean one = Boolean.TRUE.equals(call.getBoolean("repeatOne", false));
+        MusicaPlaybackService.run(getContext(), s -> s.setUpcoming(after, list, one));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void play(PluginCall call) {
+        MusicaPlaybackService.run(getContext(), MusicaPlaybackService::play);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void pause(PluginCall call) {
+        MusicaPlaybackService.run(getContext(), MusicaPlaybackService::pause);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void seek(PluginCall call) {
+        final long ms = (long) (double) call.getDouble("position", 0.0);
+        MusicaPlaybackService.run(getContext(), s -> s.seek(ms));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setRate(PluginCall call) {
+        final float r = (float) (double) call.getDouble("rate", 1.0);
+        MusicaPlaybackService.run(getContext(), s -> s.rate(r));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setRepeat(PluginCall call) {
+        final boolean one = Boolean.TRUE.equals(call.getBoolean("repeatOne", false));
+        MusicaPlaybackService.run(getContext(), s -> s.repeatOne(one));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void stopPlayer(PluginCall call) {
+        MusicaPlaybackService s = MusicaPlaybackService.instance;
+        if (s != null) MusicaPlaybackService.run(getContext(), MusicaPlaybackService::stopAll);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getState(PluginCall call) {
+        MusicaPlaybackService s = MusicaPlaybackService.instance;
+        if (s == null) {
+            JSObject o = new JSObject();
+            o.put("id", "");
+            o.put("playing", false);
+            o.put("position", 0);
+            o.put("duration", 0);
+            o.put("state", 1);
+            call.resolve(o);
+            return;
+        }
+        MusicaPlaybackService.run(getContext(), svc -> call.resolve(svc.stateObject(null)));
+    }
+
+    @PluginMethod
+    public void nativePlayerInfo(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("player", true);
+        call.resolve(o);
     }
 }
