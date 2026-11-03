@@ -29,6 +29,9 @@ function openPage(name, opts) {
 
   clearTimeout(pageTimer);
   cleanupLeaving();
+  // "no-enter" ficava preso quando o timer era cancelado por outra troca rápida e
+  // bloqueava a animação de saída da página (ela ficava parada por cima da nova)
+  document.querySelectorAll(".page.no-enter").forEach(p => p.classList.remove("no-enter"));
 
   const dir = pageOrder.indexOf(name) > pageOrder.indexOf(prev) ? 1 : -1; // 1 = vai para a direita (próxima)
   const outEl = $(pageIds[prev]);
@@ -48,7 +51,7 @@ function openPage(name, opts) {
     pageTimer = setTimeout(() => {
       cleanupLeaving();
       inEl.classList.remove("enter-from-right", "enter-from-left", "stagger", "no-enter");
-    }, 950);
+    }, 650);
   }
 
   document.querySelectorAll(".nav-item").forEach(b => {
