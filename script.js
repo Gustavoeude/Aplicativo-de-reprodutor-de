@@ -247,6 +247,7 @@ function toRecord(song) {
     sourceKey: song.sourceKey || fileIdentity(song.file),
     favorite: song.favorite,
     file: song.file,
+    nativePath: song.nativePath || "",
     coverBlob: song.coverBlob || null,
     playCount: song.playCount || 0,
     lastPlayed: song.lastPlayed || 0,
@@ -278,6 +279,7 @@ function makeSong(r) {
     sourceKey: r.sourceKey || fileIdentity(r.file),
     favorite: !!r.favorite,
     file: r.file,
+    nativePath: r.nativePath || "",
     url: URL.createObjectURL(r.file),
     coverBlob: r.coverBlob || null,
     cover: r.coverBlob ? URL.createObjectURL(r.coverBlob) : null,
@@ -1266,6 +1268,7 @@ async function addFile(file, automaticLyrics = "") {
 
   songs.push(song);
   const stored = await dbPut(toRecord(song));
+  if (stored && MN) await ensureNativeCopy(song);
 
   if (window.jsmediatags) {
     try {
@@ -1517,6 +1520,9 @@ async function deleteSong(song) {
   queue = queue.filter(id => id !== song.id);
   playHistory = playHistory.filter(id => id !== song.id);
   const deletedFromStorage = await dbDelete(song.id);
+  if (MN && song.nativePath) {
+    try { await MN.deleteSongFile({ path: song.nativePath }); } catch (_) {}
+  }
 
   refreshAll();
   showToast(deletedFromStorage
@@ -2336,8 +2342,56 @@ const MN = (() => {
   return null;
 })();
 
+
 function nativeMediaSession() {
   return MN;
+}
+
+// Copia um Blob em blocos para o diretório privado do app Android.
+// A biblioteca IndexedDB continua sendo mantida como cópia compatível/fallback.
+async function ensureNativeCopy(song) {
+  if (!MN || !song || !song.file || song.nativePath) return !!(song && song.nativePath);
+  if (!MN.beginSongTransfer || !MN.appendSongTransfer || !MN.finishSongTransfer) return false;
+
+  const id = String(song.id);
+  let started = false;
+  try {
+    await MN.beginSongTransfer({ id, fileName: song.file.name || "audio.bin" });
+    started = true;
+    const bytes = new Uint8Array(await song.file.arrayBuffer());
+    const chunkSize = 128 * 1024;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      const chunk = bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length));
+      let binary = "";
+      for (let i = 0; i < chunk.length; i++) binary += String.fromCharCode(chunk[i]);
+      await MN.appendSongTransfer({ id, chunk: btoa(binary) });
+    }
+    const result = await MN.finishSongTransfer({ id, fileName: song.file.name || "audio.bin" });
+    started = false;
+    if (!result || !result.path) throw new Error("O Android não retornou o caminho do arquivo.");
+    song.nativePath = result.path;
+    await dbPut(toRecord(song));
+    return true;
+  } catch (error) {
+    if (started) {
+      try { await MN.abortSongTransfer({ id }); } catch (_) {}
+    }
+    console.warn("Falha ao copiar música para o armazenamento privado:", error);
+    return false;
+  }
+}
+
+async function migrateExistingSongsToNativeStorage() {
+  if (!MN) return;
+  let copied = 0;
+  let failed = 0;
+  for (const song of songs) {
+    if (song.nativePath) continue;
+    if (await ensureNativeCopy(song)) copied++;
+    else failed++;
+  }
+  if (copied) showToast(copied + " música(s) copiadas para o armazenamento do Android.");
+  if (failed) showToast(failed + " música(s) não puderam ser copiadas. A biblioteca original foi mantida.");
 }
 
 const nativeState = { title: "", artist: "", playing: false, duration: 0, rate: 1 };
@@ -3617,6 +3671,7 @@ setTimeout(() => $("homePage").classList.remove("stagger"), 1100);
 
 loadSongs().then(() => {
   refreshAll();
+  migrateExistingSongsToNativeStorage();
   maybeAskPermissionsFirstRun();
 });
 
