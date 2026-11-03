@@ -3,6 +3,8 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
+    branches: [main, "fix/**"]
+  pull_request:
     branches: [main]
     paths:
       - "index.html"
@@ -35,6 +37,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+
+      - name: Verificar sintaxe JavaScript
+        run: |
+          node --check script.js
+          node --check scripts/copy-web.js
+          node --check scripts/patch-android.js
 
       - name: Instalar dependências
         run: npm install
