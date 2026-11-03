@@ -54,26 +54,27 @@ jobs:
       - name: Compilar o APK
         env:
           KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
         working-directory: android
         run: |
-          if [ -n "$KS_PASS" ]; then
+          if [ -n "$KS_PASS" ] && [ -n "$KS_B64" ]; then
             ./gradlew assembleRelease
           else
-            echo "Sem KEYSTORE_PASSWORD: compilando APK de teste (debug)."
+            echo "Sem KEYSTORE_PASSWORD/KEYSTORE_BASE64: compilando APK de teste (debug)."
             ./gradlew assembleDebug
           fi
 
       - name: Assinar o APK
         env:
           KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           mkdir -p out
-          if [ -z "$KS_PASS" ]; then
+          if [ -z "$KS_PASS" ] || [ -z "$KS_B64" ]; then
             cp android/app/build/outputs/apk/debug/app-debug.apk out/Musica-debug.apk
             exit 0
           fi
-          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:KS_PASS \
-            -in native/signing/musica.jks.enc -out "$RUNNER_TEMP/musica.jks"
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/musica.jks"
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           "$BT/zipalign" -p -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
           "$BT/apksigner" sign --ks "$RUNNER_TEMP/musica.jks" --ks-key-alias musica \

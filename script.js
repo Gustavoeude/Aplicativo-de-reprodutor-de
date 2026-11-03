@@ -317,7 +317,7 @@ let homeMain = null;
 let lrcTargetId = null;
 let seed = { h: 215, s: 0.8 };
 let settings = Object.assign(
-  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false, font: "roboto", autoLyrics: true },
+  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false, font: "roboto", autoLyrics: true, autoCovers: true },
   lsGet("settings", {})
 );
 if (!settings.shapes || typeof settings.shapes !== "object") settings.shapes = {};
@@ -1150,7 +1150,8 @@ function requestOnlineLyrics(song, force = false) {
   return tracked;
 }
 
-async function fetchOnlineCover(song) {
+async function fetchOnlineCover(song, force) {
+  if (!force && !settings.autoCovers) return false;
   if (!song || song.coverBlob || !song.name) return false;
 
   const normalize = value => String(value || "")
@@ -2894,9 +2895,12 @@ function openSettings() {
   sec.appendChild(
     switchRow("Inverter o gesto", "Troca a direção do arrastar entre as páginas", "swipeInvert")
   );
-  sec.appendChild(el("div", "set-label", "Letras"));
+  sec.appendChild(el("div", "set-label", "Busca online (privacidade)"));
   sec.appendChild(
     switchRow("Buscar letras automaticamente", "Consulta o LRCLIB usando título, artista e duração; o áudio não é enviado", "autoLyrics")
+  );
+  sec.appendChild(
+    switchRow("Buscar capas automaticamente", "Consulta a iTunes usando título e artista ao importar; o áudio não é enviado", "autoCovers")
   );
 
   const nameRow = el("button", "set-row");
