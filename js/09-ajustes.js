@@ -41,15 +41,21 @@ function switchRow(title, desc, key) {
   return row;
 }
 
-function openSettings() {
-  const returnFocus = activeSheet ? activeSheet.returnFocus : document.activeElement;
-  closeSheet();
+let settingsPage = null; // null = menu principal
 
-  const scrim = el("div", "scrim");
-  const sheet = el("div", "sheet");
-  sheet.appendChild(el("div", "sheet-handle"));
-  sheet.appendChild(el("h3", "", "Ajustes"));
+function catRow(icon, hue, title, desc, onClick) {
+  const row = el("button", "cat-row");
+  const ic = el("span", "cat-ic material-symbols-rounded", icon);
+  ic.style.background = "hsl(" + hue + " 38% 30%)";
+  const txt = el("div", "set-row-text");
+  txt.append(el("strong", "", title), el("span", "", desc));
+  row.append(ic, txt);
+  row.onclick = onClick;
+  return row;
+}
 
+/* ----- páginas dos Ajustes ----- */
+function pageAparencia(go) {
   const sec = el("div", "set-sec");
   sec.appendChild(el("div", "set-label", "Cor do app"));
 
@@ -87,93 +93,12 @@ function openSettings() {
 
   refresh();
   sec.append(swatches, hint);
-
   sec.appendChild(
     switchRow("Preto total", "Fundo preto puro (economiza bateria em tela AMOLED)", "amoled")
   );
   sec.appendChild(
     switchRow("Capa em disco", "A capa vira um disco que gira enquanto toca", "disc")
   );
-  sec.appendChild(
-    switchRow("Deslizar entre páginas", "Arraste para o lado para trocar de página", "swipe")
-  );
-  sec.appendChild(
-    switchRow("Inverter o gesto", "Troca a direção do arrastar entre as páginas", "swipeInvert")
-  );
-  sec.appendChild(el("div", "set-label", "Busca online (privacidade)"));
-  sec.appendChild(
-    switchRow("Buscar letras automaticamente", "Consulta o LRCLIB usando título, artista e duração; o áudio não é enviado", "autoLyrics")
-  );
-  sec.appendChild(
-    switchRow("Buscar capas automaticamente", "Consulta a iTunes usando título e artista ao importar; o áudio não é enviado", "autoCovers")
-  );
-  if (MN) {
-    sec.appendChild(el("div", "set-label", "Reprodução"));
-    sec.appendChild(
-      switchRow("Player nativo (segundo plano mais estável)", "Toca pelo Android, mesmo com o app congelado. Feche e abra o app depois de mudar.", "nativePlayer")
-    );
-  }
-
-  const nameRow = el("button", "set-row");
-  const nameText = el("div", "set-row-text");
-  nameText.append(
-    el("strong", "", "Seu nome"),
-    el("span", "", settings.name || "Aparece na saudação da tela inicial")
-  );
-  nameRow.append(nameText, el("span", "material-symbols-rounded", "edit"));
-
-  nameRow.onclick = async () => {
-    closeSheet();
-
-    const n = await showDialog({
-      title: "Seu nome",
-      input: { value: settings.name, placeholder: "Como você quer ser chamado?" },
-      confirmLabel: "Salvar"
-    });
-
-    if (n === null) return;
-    settings.name = n;
-    saveSettings();
-    renderGreeting();
-  };
-
-  sec.appendChild(nameRow);
-
-  const permRow = el("button", "set-row");
-  const permText = el("div", "set-row-text");
-  permText.append(
-    el("strong", "", "Importação e controles"),
-    el("span", "", "Escolha arquivos e veja o suporte do navegador")
-  );
-  permRow.append(permText, el("span", "material-symbols-rounded", "folder"));
-  permRow.onclick = () => openPermissions(false);
-  sec.appendChild(permRow);
-
-  const errRow = el("button", "set-row");
-  const errText = el("div", "set-row-text");
-  errText.append(
-    el("strong", "", "Registro de erros"),
-    el("span", "", readErrLog().length ? "Há problemas registrados; toque para ver e copiar" : "Nenhum problema registrado")
-  );
-  errRow.append(errText, el("span", "material-symbols-rounded", "bug_report"));
-  errRow.onclick = async () => {
-    const txt = errLogText();
-    if (!txt) { showToast("Nenhum erro registrado."); return; }
-    const ok = await showDialog({
-      title: "Registro de erros",
-      text: txt.length > 900 ? txt.slice(0, 900) + "…" : txt,
-      confirmLabel: "Copiar tudo"
-    });
-    if (!ok) return;
-    try {
-      await navigator.clipboard.writeText(txt);
-      showToast("Copiado.");
-    } catch (e) {
-      logErr("copiar-registro", e);
-      showToast("Não consegui copiar.");
-    }
-  };
-  sec.appendChild(errRow);
 
   const fontSec = el("div", "set-sec");
   fontSec.appendChild(el("div", "set-label", "Fonte das letras"));
@@ -222,7 +147,7 @@ function openSettings() {
           saveSettings();
           applyFont();
         }
-        openSettings();
+        go("aparencia");
       };
       row.appendChild(del);
     }
@@ -274,12 +199,160 @@ function openSettings() {
     settings.shapes = {};
     saveSettings();
     applyShapes();
-    closeSheet();
+    go("aparencia");
   };
   shapeSec.appendChild(resetRow);
-  sheet.appendChild(sec);
-  sheet.appendChild(fontSec);
-  sheet.appendChild(shapeSec);
+
+  return [sec, fontSec, shapeSec];
+}
+
+function pageBiblioteca() {
+  const sec = el("div", "set-sec");
+  const permRow = el("button", "set-row");
+  const permText = el("div", "set-row-text");
+  permText.append(
+    el("strong", "", "Importação e controles"),
+    el("span", "", "Escolha arquivos e veja o suporte do navegador")
+  );
+  permRow.append(permText, el("span", "material-symbols-rounded", "folder"));
+  permRow.onclick = () => openPermissions(false);
+  sec.appendChild(permRow);
+  return [sec];
+}
+
+function pageReproducao() {
+  const sec = el("div", "set-sec");
+  if (MN) {
+    sec.appendChild(
+      switchRow("Player nativo (segundo plano mais estável)", "Toca pelo Android, mesmo com o app congelado. Feche e abra o app depois de mudar.", "nativePlayer")
+    );
+  }
+  return [sec];
+}
+
+function pageComportamento() {
+  const sec = el("div", "set-sec");
+  sec.appendChild(
+    switchRow("Deslizar entre páginas", "Arraste para o lado para trocar de página", "swipe")
+  );
+  sec.appendChild(
+    switchRow("Inverter o gesto", "Troca a direção do arrastar entre as páginas", "swipeInvert")
+  );
+  return [sec];
+}
+
+function pagePrivacidade() {
+  const sec = el("div", "set-sec");
+  sec.appendChild(el("div", "set-label", "Busca online"));
+  sec.appendChild(
+    switchRow("Buscar letras automaticamente", "Consulta o LRCLIB usando título, artista e duração; o áudio não é enviado", "autoLyrics")
+  );
+  sec.appendChild(
+    switchRow("Buscar capas automaticamente", "Consulta a iTunes usando título e artista ao importar; o áudio não é enviado", "autoCovers")
+  );
+  return [sec];
+}
+
+function pageDiagnostico() {
+  const sec = el("div", "set-sec");
+  const errRow = el("button", "set-row");
+  const errText = el("div", "set-row-text");
+  errText.append(
+    el("strong", "", "Registro de erros"),
+    el("span", "", readErrLog().length ? "Há problemas registrados; toque para ver e copiar" : "Nenhum problema registrado")
+  );
+  errRow.append(errText, el("span", "material-symbols-rounded", "bug_report"));
+  errRow.onclick = async () => {
+    const txt = errLogText();
+    if (!txt) { showToast("Nenhum erro registrado."); return; }
+    const ok = await showDialog({
+      title: "Registro de erros",
+      text: txt.length > 900 ? txt.slice(0, 900) + "…" : txt,
+      confirmLabel: "Copiar tudo"
+    });
+    if (!ok) return;
+    try {
+      await navigator.clipboard.writeText(txt);
+      showToast("Copiado.");
+    } catch (e) {
+      logErr("copiar-registro", e);
+      showToast("Não consegui copiar.");
+    }
+  };
+  sec.appendChild(errRow);
+  return [sec];
+}
+
+async function editProfileName() {
+  closeSheet();
+  const n = await showDialog({
+    title: "Seu nome",
+    input: { value: settings.name, placeholder: "Como você quer ser chamado?" },
+    confirmLabel: "Salvar"
+  });
+  if (n !== null) {
+    settings.name = n;
+    saveSettings();
+    renderGreeting();
+  }
+  setTimeout(() => openSettings(), 300);
+}
+
+const SETTINGS_PAGES = {
+  aparencia: { title: "Aparência", build: pageAparencia },
+  biblioteca: { title: "Biblioteca", build: pageBiblioteca },
+  reproducao: { title: "Reprodução", build: pageReproducao },
+  comportamento: { title: "Comportamento", build: pageComportamento },
+  privacidade: { title: "Privacidade", build: pagePrivacidade },
+  diagnostico: { title: "Diagnóstico", build: pageDiagnostico }
+};
+
+function renderSettingsPage(sheet, go) {
+  sheet.replaceChildren(el("div", "sheet-handle"));
+  const page = SETTINGS_PAGES[settingsPage];
+
+  if (!page) {
+    settingsPage = null;
+    sheet.appendChild(el("h3", "set-title", "Ajustes"));
+    const list = el("div", "cat-list");
+    list.append(
+      catRow("person", 215, "Perfil", settings.name ? settings.name : "Seu nome e saudação", editProfileName),
+      catRow("library_music", 205, "Biblioteca", "Importar músicas e pastas", () => go("biblioteca")),
+      catRow("light_mode", 335, "Aparência", "Cor do app, fonte, preto total, capa em disco", () => go("aparencia"))
+    );
+    if (MN) list.appendChild(catRow("music_note", 350, "Reprodução", "Player nativo e segundo plano", () => go("reproducao")));
+    list.append(
+      catRow("settings", 230, "Comportamento", "Deslizar entre páginas e gestos", () => go("comportamento")),
+      catRow("lyrics", 175, "Privacidade", "Buscas online de letras e capas", () => go("privacidade")),
+      catRow("bug_report", 120, "Diagnóstico", "Registro de erros", () => go("diagnostico"))
+    );
+    sheet.appendChild(list);
+    return;
+  }
+
+  const head = el("div", "set-head");
+  const back = el("button", "set-back");
+  back.setAttribute("aria-label", "Voltar");
+  back.appendChild(el("span", "material-symbols-rounded", "arrow_back"));
+  back.onclick = () => go(null);
+  head.append(back, el("h3", "", page.title));
+  sheet.appendChild(head);
+  page.build(go).forEach(n => sheet.appendChild(n));
+}
+
+function openSettings(page) {
+  settingsPage = typeof page === "string" ? page : null;
+  const returnFocus = activeSheet ? activeSheet.returnFocus : document.activeElement;
+  closeSheet();
+
+  const scrim = el("div", "scrim");
+  const sheet = el("div", "sheet");
+  const go = p => {
+    settingsPage = p;
+    renderSettingsPage(sheet, go);
+    sheet.scrollTop = 0;
+  };
+  renderSettingsPage(sheet, go);
 
   scrim.onclick = closeSheet;
   presentSheet(scrim, sheet, returnFocus);
@@ -400,7 +473,7 @@ function openShapePicker(id, backToSettings) {
       saveSettings();
       applyShapes();
       closeSheet();
-      if (backToSettings) setTimeout(openSettings, 300);
+      if (backToSettings) setTimeout(() => openSettings("aparencia"), 300);
     };
 
     grid.appendChild(b);

@@ -139,7 +139,7 @@ $("fontInput").addEventListener("change", () => {
   $("fontInput").value = "";
 });
 
-$("homeSettings").onclick = openSettings;
+$("homeSettings").onclick = () => openSettings();
 
 /* ==========================================================
    Letras (.lrc)
