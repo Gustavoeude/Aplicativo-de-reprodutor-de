@@ -6,6 +6,7 @@ import android.os.Handler;
 import android.os.Looper;
 
 import androidx.annotation.Nullable;
+import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.PlaybackException;
@@ -102,7 +103,19 @@ public class MusicaPlaybackService extends MediaSessionService {
                 if (rate > 0f && rate <= 4f) player.setPlaybackSpeed(rate);
             }
         }
-        return START_STICKY;
+        return super.onStartCommand(intent, flags, startId);
+    }
+
+
+    public void playNow() { if (player != null) player.play(); }
+    public void pauseNow() { if (player != null) player.pause(); }
+    public void seekNow(long positionMs) { if (player != null) player.seekTo(Math.max(0L, positionMs)); }
+    public void setRateNow(float rate) {
+        if (player != null && rate > 0f && rate <= 4f) player.setPlaybackSpeed(rate);
+    }
+    public void stopNow() {
+        if (player != null) { player.pause(); player.clearMediaItems(); }
+        stopSelf();
     }
 
     private void emitState(String error) {
@@ -110,7 +123,7 @@ public class MusicaPlaybackService extends MediaSessionService {
         StateListener listener = stateListener;
         if (listener != null) {
             long duration = player.getDuration();
-            if (duration == Player.TIME_UNSET || duration < 0) duration = 0;
+            if (duration == C.TIME_UNSET || duration < 0) duration = 0;
             listener.onState(player.isPlaying(), player.getCurrentPosition(), duration,
                     player.getPlaybackState(), error);
         }
