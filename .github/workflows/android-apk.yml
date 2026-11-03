@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/native-audio-player]
+    branches: [main]
     paths:
       - "index.html"
       - "script.js"
