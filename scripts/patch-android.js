@@ -20,31 +20,43 @@ for (const f of fs.readdirSync(srcDir).filter(n => n.endsWith(".java"))) {
 }
 
 let xml = fs.readFileSync(manifestPath, "utf8");
-if (!xml.includes("MusicaService")) {
-  const perms = [
-    "android.permission.FOREGROUND_SERVICE",
-    "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
-    "android.permission.POST_NOTIFICATIONS",
-    "android.permission.WAKE_LOCK"
-  ]
-    .filter(p => !xml.includes('"' + p + '"'))
-    .map(p => '    <uses-permission android:name="' + p + '" />\n')
-    .join("");
-  const service =
-    '        <service android:name=".MusicaService" android:exported="false" android:foregroundServiceType="mediaPlayback" />\n' +
-    '        <service android:name=".MusicaPlaybackService" android:exported="true" android:foregroundServiceType="mediaPlayback">\n' +
-    '            <intent-filter>\n' +
-    '                <action android:name="androidx.media3.session.MediaSessionService" />\n' +
-    '            </intent-filter>\n' +
-    '        </service>\n';
+const missingPermissions = [
+  "android.permission.FOREGROUND_SERVICE",
+  "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+  "android.permission.POST_NOTIFICATIONS",
+  "android.permission.WAKE_LOCK"
+].filter(permission => !xml.includes('"' + permission + '"'));
 
-  if (!xml.includes("</application>")) throw new Error("AndroidManifest sem </application>");
-  xml = xml.replace("</application>", service + "    </application>");
-  xml = xml.replace(/(\s*<application)/, "\n" + perms.replace(/\n$/, "") + "$1");
-  fs.writeFileSync(manifestPath, xml);
-  console.log("AndroidManifest atualizado");
+if (missingPermissions.length) {
+  const declarations = missingPermissions
+    .map(permission => '    <uses-permission android:name="' + permission + '" />')
+    .join("\n") + "\n";
+  if (!xml.includes("<application")) throw new Error("AndroidManifest sem tag <application>");
+  xml = xml.replace("<application", declarations + "    <application");
 }
 
+const services = [];
+if (!xml.includes('android:name=".MusicaService"')) {
+  services.push('        <service android:name=".MusicaService" android:exported="false" android:foregroundServiceType="mediaPlayback" />');
+}
+if (!xml.includes('android:name=".MusicaPlaybackService"')) {
+  services.push(
+    '        <service android:name=".MusicaPlaybackService" android:exported="true" android:foregroundServiceType="mediaPlayback">',
+    '            <intent-filter>',
+    '                <action android:name="androidx.media3.session.MediaSessionService" />',
+    '            </intent-filter>',
+    '        </service>'
+  );
+}
+if (services.length) {
+  if (!xml.includes("</application>")) throw new Error("AndroidManifest sem </application>");
+  xml = xml.replace("</application>", services.join("\n") + "\n    </application>");
+}
+
+if (missingPermissions.length || services.length) {
+  fs.writeFileSync(manifestPath, xml);
+  console.log("AndroidManifest atualizado (permissões e serviços verificados)");
+}
 /* ----- nome, ícone e versão do app ----- */
 const res = path.join(root, "android/app/src/main/res");
 const APP_NAME = "Música";
@@ -89,14 +101,18 @@ console.log("ícone aplicado");
 const gradlePath = path.join(root, "android/app/build.gradle");
 let g = fs.readFileSync(gradlePath, "utf8");
 // Media3 (ExoPlayer + sessão de mídia) para o player nativo
-if (!g.includes("androidx.media3:media3-exoplayer")) {
-  const deps = [
-    '    implementation "androidx.media3:media3-exoplayer:1.11.1"',
-    '    implementation "androidx.media3:media3-session:1.11.1"'
-  ].join("\n");
-  if (!/dependencies\s*\{/.test(g)) throw new Error("Bloco dependencies não encontrado no build.gradle");
-  g = g.replace(/(dependencies\s*\{)/, "$1\n" + deps);
-  console.log("Dependências Media3 adicionadas");
+const media3Dependencies = [
+  '    implementation "androidx.media3:media3-exoplayer:1.11.1"',
+  '    implementation "androidx.media3:media3-session:1.11.1"'
+];
+const missingMedia3 = media3Dependencies.filter(dependency => {
+  const coordinate = dependency.split('"')[1].split(':').slice(0, 2).join(':');
+  return !g.includes(coordinate);
+});
+if (missingMedia3.length) {
+  if (!g.includes("dependencies {")) throw new Error("Bloco dependencies não encontrado no build.gradle");
+  g = g.replace("dependencies {", "dependencies {\n" + missingMedia3.join("\n"));
+  console.log("Dependências Media3 verificadas/adicionadas");
 }
 const code = parseInt(process.env.GITHUB_RUN_NUMBER || "1", 10);
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
