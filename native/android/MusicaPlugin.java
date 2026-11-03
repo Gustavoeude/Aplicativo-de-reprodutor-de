@@ -86,7 +86,9 @@ public class MusicaPlugin extends Plugin {
             java.io.FileOutputStream old = pendingSongTransfers.remove(id);
             if (old != null) try { old.close(); } catch (Exception ignored) {}
             pendingSongTransfers.put(id, new java.io.FileOutputStream(temp, false));
-            call.resolve(new JSObject().put("ok", true));
+            JSObject result = new JSObject();
+            result.put("ok", true);
+            call.resolve(result);
         } catch (Exception e) {
             call.reject("Não foi possível iniciar a cópia: " + e.getMessage());
         }
@@ -133,7 +135,9 @@ public class MusicaPlugin extends Plugin {
             java.io.File target = new java.io.File(dir, key + "." + ext);
             if (target.exists() && !target.delete()) throw new java.io.IOException("Não foi possível substituir a cópia anterior.");
             if (!temp.renameTo(target)) throw new java.io.IOException("Não foi possível finalizar a cópia.");
-            call.resolve(new JSObject().put("path", target.getAbsolutePath()));
+            JSObject result = new JSObject();
+            result.put("path", target.getAbsolutePath());
+            call.resolve(result);
         } catch (Exception e) {
             call.reject("Não foi possível finalizar a cópia: " + e.getMessage());
         }
