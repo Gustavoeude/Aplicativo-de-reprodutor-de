@@ -31,7 +31,12 @@ if (!xml.includes("MusicaService")) {
     .map(p => '    <uses-permission android:name="' + p + '" />\n')
     .join("");
   const service =
-    '        <service android:name=".MusicaService" android:exported="false" android:foregroundServiceType="mediaPlayback" />\n';
+    '        <service android:name=".MusicaService" android:exported="false" android:foregroundServiceType="mediaPlayback" />\n' +
+    '        <service android:name=".MusicaPlaybackService" android:exported="true" android:foregroundServiceType="mediaPlayback">\n' +
+    '            <intent-filter>\n' +
+    '                <action android:name="androidx.media3.session.MediaSessionService" />\n' +
+    '            </intent-filter>\n' +
+    '        </service>\n';
 
   if (!xml.includes("</application>")) throw new Error("AndroidManifest sem </application>");
   xml = xml.replace("</application>", service + "    </application>");
@@ -83,6 +88,17 @@ console.log("ícone aplicado");
 // versionCode: sobe a cada build (necessário para atualizar por cima do app instalado)
 const gradlePath = path.join(root, "android/app/build.gradle");
 let g = fs.readFileSync(gradlePath, "utf8");
+// Media3: ExoPlayer + MediaSessionService para reprodução nativa em segundo plano.
+if (!g.includes("androidx.media3:media3-exoplayer")) {
+  const deps = [
+    '    implementation "androidx.media3:media3-exoplayer:1.11.1"',
+    '    implementation "androidx.media3:media3-session:1.11.1"'
+  ].join("\n");
+  if (!/dependencies\s*\{/.test(g)) throw new Error("Bloco dependencies não encontrado no build.gradle");
+  g = g.replace(/(dependencies\s*\{)/, "$1\n" + deps);
+  fs.writeFileSync(gradlePath, g);
+  console.log("Dependências AndroidX Media3 adicionadas");
+}
 const code = parseInt(process.env.GITHUB_RUN_NUMBER || "1", 10);
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 g = g.replace(/versionCode\s+\d+/, "versionCode " + code).replace(/versionName\s+"[^"]*"/, 'versionName "' + (pkg.version || "1.0.0") + "." + code + '"');
