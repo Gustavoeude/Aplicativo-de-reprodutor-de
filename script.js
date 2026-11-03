@@ -1557,6 +1557,41 @@ async function collectFromDirectory(dirHandle, out, prefix = "") {
 }
 
 async function importFolder() {
+  // No APK, usa o seletor nativo de pastas do Android (Storage Access Framework).
+  if (MN && typeof MN.pickFolder === "function") {
+    try {
+      const selected = await MN.pickFolder();
+      if (!selected || selected.cancelled) return;
+
+      showToast("Lendo a pasta…");
+      const listing = await MN.listFolderAudio({ uri: selected.uri });
+      const found = [];
+
+      for (const item of (listing.files || [])) {
+        const result = await MN.readFolderFile({ uri: item.uri });
+        const binary = atob(result.base64 || "");
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const file = new File([bytes], item.name, {
+          type: item.mimeType || "application/octet-stream",
+          lastModified: Date.now()
+        });
+        try {
+          Object.defineProperty(file, "sourcePath", { value: item.relativePath || item.name });
+        } catch (_) {}
+        found.push(file);
+      }
+
+      await importFiles(found, "“" + (selected.name || "pasta") + "”");
+      return;
+    } catch (e) {
+      console.error("Falha ao importar pasta pelo Android:", e);
+      showToast("Não foi possível ler essa pasta. Tente novamente ou escolha as músicas individualmente.");
+      return;
+    }
+  }
+
+  // Compatibilidade com a versão web.
   if (window.showDirectoryPicker) {
     let dir;
     try {
@@ -1579,7 +1614,6 @@ async function importFolder() {
     }
   }
 
-  // Alternativa: seletor de pasta do navegador
   folderInput.click();
 }
 
