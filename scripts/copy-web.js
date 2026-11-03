@@ -5,7 +5,18 @@ const root = path.resolve(__dirname, "..");
 const out = path.join(root, "www");
 const files = [
   "index.html",
-  "script.js",
+  "js/00-erros.js",
+  "js/01-base.js",
+  "js/02-player-nativo.js",
+  "js/03-estado-cor-tema.js",
+  "js/04-navegacao-dialogos.js",
+  "js/05-importar.js",
+  "js/06-playlists-listas.js",
+  "js/07-reproducao.js",
+  "js/08-progresso-player-completo.js",
+  "js/09-ajustes.js",
+  "js/10-fontes-letras.js",
+  "js/11-inicio-pwa.js",
   "style.css",
   "jsmediatags.min.js",
   "manifest.json",
@@ -23,6 +34,7 @@ for (const file of files) {
     if (file.startsWith("icon-")) continue;
     throw new Error("Arquivo obrigatório não encontrado: " + file);
   }
+  fs.mkdirSync(path.dirname(path.join(out, file)), { recursive: true });
   fs.copyFileSync(source, path.join(out, file));
 }
 console.log("Arquivos web preparados em www/");
