@@ -32,11 +32,11 @@ if (!xml.includes("MusicaService")) {
     .join("");
   const service =
     '        <service android:name=".MusicaService" android:exported="false" android:foregroundServiceType="mediaPlayback" />\n' +
-    '        <service android:name=".MusicaPlaybackService" android:exported="true" android:foregroundServiceType="mediaPlayback">\\n' +
-    '            <intent-filter>\\n' +
-    '                <action android:name="androidx.media3.session.MediaSessionService" />\\n' +
-    '            </intent-filter>\\n' +
-    '        </service>\\n';
+    '        <service android:name=".MusicaPlaybackService" android:exported="true" android:foregroundServiceType="mediaPlayback">\n' +
+    '            <intent-filter>\n' +
+    '                <action android:name="androidx.media3.session.MediaSessionService" />\n' +
+    '            </intent-filter>\n' +
+    '        </service>\n';
 
   if (!xml.includes("</application>")) throw new Error("AndroidManifest sem </application>");
   xml = xml.replace("</application>", service + "    </application>");
@@ -93,9 +93,9 @@ if (!g.includes("androidx.media3:media3-exoplayer")) {
   const deps = [
     '    implementation "androidx.media3:media3-exoplayer:1.11.1"',
     '    implementation "androidx.media3:media3-session:1.11.1"'
-  ].join("\\n");
-  if (!/dependencies\\s*\\{/.test(g)) throw new Error("Bloco dependencies não encontrado no build.gradle");
-  g = g.replace(/(dependencies\\s*\\{)/, "$1\\n" + deps);
+  ].join("\n");
+  if (!/dependencies\s*\{/.test(g)) throw new Error("Bloco dependencies não encontrado no build.gradle");
+  g = g.replace(/(dependencies\s*\{)/, "$1\n" + deps);
   fs.writeFileSync(gradlePath, g);
   console.log("Dependências AndroidX Media3 adicionadas");
 }
