@@ -273,8 +273,13 @@ public class MusicaPlaybackService extends MediaSessionService {
 
     @Override
     public void onTaskRemoved(@Nullable Intent rootIntent) {
-        // app removido dos recentes: pausa e encerra o serviço
-        pauseAllPlayersAndStopSelf();
+        // app removido dos recentes: se estiver tocando, continua (fila nativa);
+        // se estiver parado/pausado, encerra o serviço
+        if (player == null || !player.getPlayWhenReady()
+                || player.getPlaybackState() == Player.STATE_ENDED
+                || player.getPlaybackState() == Player.STATE_IDLE) {
+            stopSelf();
+        }
     }
 
     @Override
