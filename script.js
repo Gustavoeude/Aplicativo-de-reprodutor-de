@@ -2761,13 +2761,15 @@ async function nativePushUpcoming() {
 function onNativeTransition(idStr, silent) {
   const song = songs.find(s => String(s.id) === String(idStr));
   if (!song || song.id === currentId) return;
-  if (currentId !== null) {
+  const wentBack = playHistory.length && playHistory[playHistory.length - 1] === song.id;
+  if (wentBack) playHistory.pop();
+  else if (currentId !== null) {
     playHistory.push(currentId);
     if (playHistory.length > 50) playHistory.shift();
   }
   if (!queue.includes(song.id)) queue = allIds();
   currentId = song.id;
-  if (!silent) {
+  if (!silent && !wentBack) {
     song.playCount += 1;
     song.lastPlayed = Date.now();
     dbPut(toRecord(song));

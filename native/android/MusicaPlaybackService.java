@@ -168,6 +168,7 @@ public class MusicaPlaybackService extends MediaSessionService {
 
         private void goPrevious() {
             if (getCurrentPosition() > 3000) seekTo(0);
+            else if (super.hasPreviousMediaItem()) super.seekToPreviousMediaItem();
             else action("previous");
         }
 
@@ -232,7 +233,8 @@ public class MusicaPlaybackService extends MediaSessionService {
         int idx = player.getCurrentMediaItemIndex();
         int n = player.getMediaItemCount();
         if (n > idx + 1) player.removeMediaItems(idx + 1, n);
-        if (idx > 0) player.removeMediaItems(0, idx);
+        // mantém as últimas 5 já tocadas: "anterior" funciona sem depender do JavaScript
+        if (idx > 5) player.removeMediaItems(0, idx - 5);
         if (!items.isEmpty()) player.addMediaItems(items);
     }
 
