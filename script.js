@@ -298,6 +298,133 @@ function makeSong(r) {
 /* ==========================================================
    Estado
    ========================================================== */
+const MN = (() => {
+  try {
+    const C = window.Capacitor;
+    if (C && C.isNativePlatform && C.isNativePlatform()) {
+      return C.registerPlugin ? C.registerPlugin("MusicaNative") : C.Plugins && C.Plugins.MusicaNative;
+    }
+  } catch (_) {}
+  return null;
+})();
+
+const nativePlayback = !!(MN && MN.setTrack && MN.play && MN.pause && MN.seekTo);
+
+function createNativeAudioBridge(plugin) {
+  const listeners = new Map();
+  const state = { paused: true, currentTime: 0, duration: 0, playbackRate: 1, error: null, src: "" };
+  let endedSent = false;
+
+  function emit(type) {
+    const event = new Event(type);
+    const callbacks = listeners.get(type);
+    if (callbacks) Array.from(callbacks).forEach(fn => {
+      try { fn.call(audio, event); } catch (error) { console.warn(error); }
+    });
+  }
+
+  const audio = {
+    addEventListener(type, callback) {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type).add(callback);
+    },
+    removeEventListener(type, callback) {
+      const callbacks = listeners.get(type);
+      if (callbacks) callbacks.delete(callback);
+    },
+    async setTrack(song) {
+      if (!song || !song.nativePath) throw new Error("A música ainda não foi copiada para o armazenamento do Android.");
+      state.src = song.nativePath;
+      state.currentTime = 0;
+      state.duration = 0;
+      state.error = null;
+      endedSent = false;
+      await plugin.setTrack({
+        path: song.nativePath,
+        title: song.name || "Música",
+        artist: song.artist || "",
+        autoplay: true
+      });
+    },
+    async play() {
+      try {
+        await plugin.play();
+        state.paused = false;
+        emit("play");
+        emit("playing");
+      } catch (error) {
+        state.paused = true;
+        emit("pause");
+        throw error;
+      }
+    },
+    pause() {
+      plugin.pause().catch(() => {});
+      if (!state.paused) {
+        state.paused = true;
+        emit("pause");
+      }
+    },
+    removeAttribute(name) {
+      if (name === "src") {
+        if (plugin.stopPlayback) plugin.stopPlayback().catch(() => {});
+        state.src = "";
+        state.currentTime = 0;
+        state.duration = 0;
+        state.paused = true;
+        emit("pause");
+        emit("timeupdate");
+      }
+    },
+    load() {},
+    get paused() { return state.paused; },
+    get currentTime() { return state.currentTime; },
+    set currentTime(value) {
+      const next = Math.max(0, Number(value) || 0);
+      state.currentTime = next;
+      plugin.seekTo({ position: next }).catch(() => {});
+      emit("seeked");
+      emit("timeupdate");
+    },
+    get duration() { return state.duration; },
+    get playbackRate() { return state.playbackRate; },
+    set playbackRate(value) {
+      const rate = Number(value) || 1;
+      state.playbackRate = rate;
+      if (plugin.setRate) plugin.setRate({ rate }).catch(() => {});
+    },
+    get error() { return state.error; },
+    get src() { return state.src; },
+    set src(value) { state.src = String(value || ""); }
+  };
+
+  if (plugin.addListener) {
+    plugin.addListener("playerState", event => {
+      const wasPaused = state.paused;
+      state.paused = !event.playing;
+      state.currentTime = Math.max(0, Number(event.position) || 0);
+      state.duration = Math.max(0, Number(event.duration) || 0);
+      if (event.error) state.error = { code: 3, message: event.error };
+      else state.error = null;
+      if (wasPaused !== state.paused) emit(state.paused ? "pause" : "play");
+      if (!state.paused) emit("playing");
+      if (state.duration > 0) emit("loadedmetadata");
+      emit("durationchange");
+      emit("timeupdate");
+      if (event.playbackState === 4 && !endedSent) {
+        endedSent = true;
+        state.paused = true;
+        emit("pause");
+        emit("ended");
+      } else if (event.playbackState !== 4) {
+        endedSent = false;
+      }
+    });
+  }
+
+  return audio;
+}
+
 const htmlAudio = $("audio");
 const audio = nativePlayback ? createNativeAudioBridge(MN) : htmlAudio;
 const fileInput = $("fileInput");
@@ -2345,169 +2472,51 @@ audio.addEventListener("playing", () => {
    notificação de mídia. No navegador/PWA ele não existe e nada disso roda. */
 
 
-const MN = (() => {
-  try {
-    const C = window.Capacitor;
-    if (C && C.isNativePlatform && C.isNativePlatform()) {
-      return C.registerPlugin ? C.registerPlugin("MusicaNative") : C.Plugins && C.Plugins.MusicaNative;
-    }
-  } catch (_) {}
-  return null;
-})();
-
-const nativePlayback = !!(MN && MN.setTrack && MN.play && MN.pause && MN.seekTo);
-
-function createNativeAudioBridge(plugin) {
-  const listeners = new Map();
-  const state = { paused: true, currentTime: 0, duration: 0, playbackRate: 1, error: null, src: "" };
-  let endedSent = false;
-
-  function emit(type) {
-    const event = new Event(type);
-    const callbacks = listeners.get(type);
-    if (callbacks) Array.from(callbacks).forEach(fn => {
-      try { fn.call(audio, event); } catch (error) { console.warn(error); }
-    });
-  }
-
-  const audio = {
-    addEventListener(type, callback) {
-      if (!listeners.has(type)) listeners.set(type, new Set());
-      listeners.get(type).add(callback);
-    },
-    removeEventListener(type, callback) {
-      const callbacks = listeners.get(type);
-      if (callbacks) callbacks.delete(callback);
-    },
-    async setTrack(song) {
-      if (!song || !song.nativePath) throw new Error("A música ainda não foi copiada para o armazenamento do Android.");
-      state.src = song.nativePath;
-      state.currentTime = 0;
-      state.duration = 0;
-      state.error = null;
-      endedSent = false;
-      await plugin.setTrack({
-        path: song.nativePath,
-        title: song.name || "Música",
-        artist: song.artist || "",
-        autoplay: true
-      });
-    },
-    async play() {
-      try {
-        await plugin.play();
-        state.paused = false;
-        emit("play");
-        emit("playing");
-      } catch (error) {
-        state.paused = true;
-        emit("pause");
-        throw error;
-      }
-    },
-    pause() {
-      plugin.pause().catch(() => {});
-      if (!state.paused) {
-        state.paused = true;
-        emit("pause");
-      }
-    },
-    removeAttribute(name) {
-      if (name === "src") {
-        if (plugin.stopPlayback) plugin.stopPlayback().catch(() => {});
-        state.src = "";
-        state.currentTime = 0;
-        state.duration = 0;
-        state.paused = true;
-        emit("pause");
-        emit("timeupdate");
-      }
-    },
-    load() {},
-    get paused() { return state.paused; },
-    get currentTime() { return state.currentTime; },
-    set currentTime(value) {
-      const next = Math.max(0, Number(value) || 0);
-      state.currentTime = next;
-      plugin.seekTo({ position: next }).catch(() => {});
-      emit("seeked");
-      emit("timeupdate");
-    },
-    get duration() { return state.duration; },
-    get playbackRate() { return state.playbackRate; },
-    set playbackRate(value) {
-      const rate = Number(value) || 1;
-      state.playbackRate = rate;
-      if (plugin.setRate) plugin.setRate({ rate }).catch(() => {});
-    },
-    get error() { return state.error; },
-    get src() { return state.src; },
-    set src(value) { state.src = String(value || ""); }
-  };
-
-  if (plugin.addListener) {
-    plugin.addListener("playerState", event => {
-      const wasPaused = state.paused;
-      state.paused = !event.playing;
-      state.currentTime = Math.max(0, Number(event.position) || 0);
-      state.duration = Math.max(0, Number(event.duration) || 0);
-      if (event.error) state.error = { code: 3, message: event.error };
-      else state.error = null;
-      if (wasPaused !== state.paused) emit(state.paused ? "pause" : "play");
-      if (!state.paused) emit("playing");
-      if (state.duration > 0) emit("loadedmetadata");
-      emit("durationchange");
-      emit("timeupdate");
-      if (event.playbackState === 4 && !endedSent) {
-        endedSent = true;
-        state.paused = true;
-        emit("pause");
-        emit("ended");
-      } else if (event.playbackState !== 4) {
-        endedSent = false;
-      }
-    });
-  }
-
-  return audio;
-}
-
 function nativeMediaSession() {
   return MN;
 }
 
 // Copia um Blob em blocos para o diretório privado do app Android.
 // A biblioteca IndexedDB continua sendo mantida como cópia compatível/fallback.
+const nativeCopyJobs = new Map();
+
 async function ensureNativeCopy(song) {
   if (!MN || !song || !song.file || song.nativePath) return !!(song && song.nativePath);
-  if (!MN.beginSongTransfer || !MN.appendSongTransfer || !MN.finishSongTransfer) return false;
-
   const id = String(song.id);
-  let started = false;
-  try {
-    await MN.beginSongTransfer({ id, fileName: song.file.name || "audio.bin" });
-    started = true;
-    const bytes = new Uint8Array(await song.file.arrayBuffer());
-    const chunkSize = 128 * 1024;
-    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-      const chunk = bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length));
-      let binary = "";
-      for (let i = 0; i < chunk.length; i++) binary += String.fromCharCode(chunk[i]);
-      await MN.appendSongTransfer({ id, chunk: btoa(binary) });
+  if (nativeCopyJobs.has(id)) return nativeCopyJobs.get(id);
+
+  const job = (async () => {
+    if (!MN.beginSongTransfer || !MN.appendSongTransfer || !MN.finishSongTransfer) return false;
+    let started = false;
+    try {
+      await MN.beginSongTransfer({ id, fileName: song.file.name || "audio.bin" });
+      started = true;
+      const bytes = new Uint8Array(await song.file.arrayBuffer());
+      const chunkSize = 128 * 1024;
+      for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        const chunk = bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length));
+        let binary = "";
+        for (let i = 0; i < chunk.length; i++) binary += String.fromCharCode(chunk[i]);
+        await MN.appendSongTransfer({ id, chunk: btoa(binary) });
+      }
+      const result = await MN.finishSongTransfer({ id, fileName: song.file.name || "audio.bin" });
+      started = false;
+      if (!result || !result.path) throw new Error("O Android não retornou o caminho do arquivo.");
+      song.nativePath = result.path;
+      await dbPut(toRecord(song));
+      return true;
+    } catch (error) {
+      if (started) {
+        try { await MN.abortSongTransfer({ id }); } catch (_) {}
+      }
+      console.warn("Falha ao copiar música para o armazenamento privado:", error);
+      return false;
     }
-    const result = await MN.finishSongTransfer({ id, fileName: song.file.name || "audio.bin" });
-    started = false;
-    if (!result || !result.path) throw new Error("O Android não retornou o caminho do arquivo.");
-    song.nativePath = result.path;
-    await dbPut(toRecord(song));
-    return true;
-  } catch (error) {
-    if (started) {
-      try { await MN.abortSongTransfer({ id }); } catch (_) {}
-    }
-    console.warn("Falha ao copiar música para o armazenamento privado:", error);
-    return false;
-  }
+  })();
+
+  nativeCopyJobs.set(id, job);
+  try { return await job; }
+  finally { nativeCopyJobs.delete(id); }
 }
 
 async function migrateExistingSongsToNativeStorage() {
