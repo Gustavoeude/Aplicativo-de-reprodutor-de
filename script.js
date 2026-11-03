@@ -1148,6 +1148,10 @@ function readLocalTrackDuration(song) {
   });
 }
 
+function hasSyncedLyrics(song) {
+  return !!(song && song.lyrics && parseLrc(song.lyrics).synced);
+}
+
 function chooseLyricsRecord(song, records, duration) {
   const title = normalizeLyricsLookup(lyricsLookupTitle(song));
   if (!title || !Array.isArray(records)) return null;
@@ -1249,7 +1253,9 @@ function updateLyricsLookupView(song) {
 }
 
 function requestOnlineLyrics(song, force = false) {
-  if (!song || song.lyrics || !songs.includes(song)) return Promise.resolve(false);
+  if (!song || !songs.includes(song)) return Promise.resolve(false);
+  // Uma letra simples não deve bloquear uma nova busca por uma versão sincronizada.
+  if (song.lyrics && (!force || hasSyncedLyrics(song))) return Promise.resolve(false);
   if (!force && !settings.autoLyrics) return Promise.resolve(false);
   if (lyricsLookupInFlight.has(song.id)) return lyricsLookupInFlight.get(song.id);
   const now = Date.now();
@@ -1268,10 +1274,10 @@ function requestOnlineLyrics(song, force = false) {
   }
 
   const task = lyricsLookupQueue.then(async () => {
-    if (!songs.includes(song) || song.lyrics || (!force && !settings.autoLyrics)) return false;
+    if (!songs.includes(song) || (song.lyrics && (!force || hasSyncedLyrics(song))) || (!force && !settings.autoLyrics)) return false;
     const wait = Math.max(0, 1500 - (Date.now() - lastLyricsLookupAt));
     if (wait) await new Promise(resolve => setTimeout(resolve, wait));
-    if (!songs.includes(song) || song.lyrics) return false;
+    if (!songs.includes(song) || (song.lyrics && (!force || hasSyncedLyrics(song)))) return false;
     lyricsLookupStatus.set(song.id, "searching");
     updateLyricsLookupView(song);
     lastLyricsLookupAt = Date.now();
@@ -1281,10 +1287,18 @@ function requestOnlineLyrics(song, force = false) {
       song.lyricsSearchAt = Date.now();
       song.lyricsRetryAt = 0;
       song.lyricsRetryReason = "";
-      if (record) {
-        song.lyrics = record.syncedLyrics || record.plainLyrics || "";
+      if (record && record.syncedLyrics) {
+        song.lyrics = record.syncedLyrics;
         song.lyricsSource = "lrclib";
         song.lyricsSourceId = record.id || null;
+        lyricsLookupStatus.set(song.id, "found");
+      } else if (record && !song.lyrics) {
+        song.lyrics = record.plainLyrics || "";
+        song.lyricsSource = "lrclib";
+        song.lyricsSourceId = record.id || null;
+        lyricsLookupStatus.set(song.id, song.lyrics ? "found" : "not-found");
+      } else if (song.lyrics) {
+        // Mantém a letra já salva se a busca não encontrou uma versão sincronizada.
         lyricsLookupStatus.set(song.id, "found");
       } else {
         lyricsLookupStatus.set(song.id, "not-found");
@@ -1755,6 +1769,14 @@ function openSongMenu(song, opts = {}) {
     label: song.lyrics ? "Trocar letra (.lrc)" : "Importar letra (.lrc)",
     run: () => pickLrcFor(song.id)
   });
+
+  if (song.lyrics && !hasSyncedLyrics(song)) {
+    actions.push({
+      icon: "search",
+      label: "Buscar letra sincronizada",
+      run: () => requestOnlineLyrics(song, true)
+    });
+  }
 
   if (song.lyrics) {
     actions.push({
