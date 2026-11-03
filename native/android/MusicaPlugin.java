@@ -1,10 +1,17 @@
 package br.com.gustavoeude.reprodutormusical;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.net.Uri;
 import android.os.Build;
+import android.provider.DocumentsContract;
+
+import androidx.activity.result.ActivityResult;
+import com.getcapacitor.annotation.ActivityCallback;
 
 import androidx.core.content.ContextCompat;
 import androidx.media3.common.MediaItem;
@@ -31,6 +38,138 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 /** Ponte entre o JavaScript do app e o serviço de reprodução em segundo plano. */
 @CapacitorPlugin(name = "MusicaNative")
 public class MusicaPlugin extends Plugin {
+
+    // ================= seleção nativa de pastas =================
+    @PluginMethod
+    public void pickFolder(PluginCall call) {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+        startActivityForResult(call, intent, "folderPickerResult");
+    }
+
+    @ActivityCallback
+    private void folderPickerResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null
+                || result.getData().getData() == null) {
+            JSObject cancelled = new JSObject();
+            cancelled.put("cancelled", true);
+            call.resolve(cancelled);
+            return;
+        }
+
+        Uri treeUri = result.getData().getData();
+        try {
+            int flags = result.getData().getFlags()
+                    & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            getContext().getContentResolver().takePersistableUriPermission(treeUri, flags);
+        } catch (Exception ignored) {}
+
+        JSObject response = new JSObject();
+        response.put("cancelled", false);
+        response.put("uri", treeUri.toString());
+        response.put("name", queryDisplayName(treeUri));
+        call.resolve(response);
+    }
+
+    private String queryDisplayName(Uri treeUri) {
+        try {
+            String documentId = DocumentsContract.getTreeDocumentId(treeUri);
+            Uri documentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId);
+            try (Cursor cursor = getContext().getContentResolver().query(
+                    documentUri, new String[]{DocumentsContract.Document.COLUMN_DISPLAY_NAME},
+                    null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) return cursor.getString(0);
+            }
+        } catch (Exception ignored) {}
+        return "pasta";
+    }
+
+    @PluginMethod
+    public void listFolderAudio(PluginCall call) {
+        try {
+            String value = call.getString("uri");
+            if (value == null || value.isEmpty()) throw new IllegalArgumentException("Pasta inválida");
+            Uri treeUri = Uri.parse(value);
+            JSArray files = new JSArray();
+            String rootId = DocumentsContract.getTreeDocumentId(treeUri);
+            collectFolderAudio(treeUri, rootId, "", files);
+
+            JSObject response = new JSObject();
+            response.put("files", files);
+            call.resolve(response);
+        } catch (Exception e) {
+            call.reject("Não foi possível listar a pasta: " + e.getMessage());
+        }
+    }
+
+    private void collectFolderAudio(Uri treeUri, String parentId, String prefix, JSArray files) throws Exception {
+        Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId);
+        String[] columns = {
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                DocumentsContract.Document.COLUMN_MIME_TYPE
+        };
+        try (Cursor cursor = getContext().getContentResolver().query(
+                childrenUri, columns, null, null, null)) {
+            if (cursor == null) return;
+            int idColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID);
+            int nameColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+            int mimeColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE);
+            while (cursor.moveToNext()) {
+                String id = cursor.getString(idColumn);
+                String name = cursor.getString(nameColumn);
+                String mime = cursor.getString(mimeColumn);
+                String relativePath = prefix.isEmpty() ? name : prefix + "/" + name;
+
+                if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
+                    collectFolderAudio(treeUri, id, relativePath, files);
+                } else if (isAudioDocument(name, mime)) {
+                    Uri fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, id);
+                    JSObject item = new JSObject();
+                    item.put("uri", fileUri.toString());
+                    item.put("name", name);
+                    item.put("relativePath", relativePath);
+                    item.put("mimeType", mime == null ? "application/octet-stream" : mime);
+                    files.put(item);
+                }
+            }
+        }
+    }
+
+    private boolean isAudioDocument(String name, String mime) {
+        if (mime != null && mime.toLowerCase(java.util.Locale.ROOT).startsWith("audio/")) return true;
+        String lower = name == null ? "" : name.toLowerCase(java.util.Locale.ROOT);
+        return lower.endsWith(".mp3") || lower.endsWith(".m4a") || lower.endsWith(".m4b")
+                || lower.endsWith(".aac") || lower.endsWith(".flac") || lower.endsWith(".ogg")
+                || lower.endsWith(".oga") || lower.endsWith(".opus") || lower.endsWith(".wav")
+                || lower.endsWith(".weba") || lower.endsWith(".webm") || lower.endsWith(".aiff")
+                || lower.endsWith(".aif") || lower.endsWith(".alac") || lower.endsWith(".amr")
+                || lower.endsWith(".3gp") || lower.endsWith(".lrc");
+    }
+
+    @PluginMethod
+    public void readFolderFile(PluginCall call) {
+        try {
+            String value = call.getString("uri");
+            if (value == null || value.isEmpty()) throw new IllegalArgumentException("Arquivo inválido");
+            Uri uri = Uri.parse(value);
+            java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+            try (java.io.InputStream input = getContext().getContentResolver().openInputStream(uri)) {
+                if (input == null) throw new java.io.IOException("Arquivo indisponível");
+                byte[] buffer = new byte[64 * 1024];
+                int count;
+                while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+            }
+            JSObject response = new JSObject();
+            response.put("base64", Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP));
+            call.resolve(response);
+        } catch (Exception e) {
+            call.reject("Não foi possível ler o arquivo: " + e.getMessage());
+        }
+    }
 
     @Override
     public void load() {
