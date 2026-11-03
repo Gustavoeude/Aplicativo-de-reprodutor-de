@@ -1,0 +1,299 @@
+package br.com.gustavoeude.reprodutormusical;
+
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
+
+import androidx.annotation.Nullable;
+import androidx.media3.common.AudioAttributes;
+import androidx.media3.common.C;
+import androidx.media3.common.ForwardingPlayer;
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.MediaMetadata;
+import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
+import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.session.MediaSession;
+import androidx.media3.session.MediaSessionService;
+
+import com.getcapacitor.JSObject;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+
+/**
+ * Player de áudio nativo (Media3/ExoPlayer) que toca sem depender do WebView.
+ *
+ * Regras de segurança:
+ *  - TODO acesso ao ExoPlayer acontece na thread principal (run() reposta tudo);
+ *  - existe um único serviço de mídia;
+ *  - qualquer exceção é capturada e vira um evento "state" com erro, nunca derruba o app.
+ */
+public class MusicaPlaybackService extends MediaSessionService {
+    public interface EventSink {
+        void emit(String name, JSObject data);
+    }
+
+    static final Handler MAIN = new Handler(Looper.getMainLooper());
+    static volatile MusicaPlaybackService instance;
+    static volatile EventSink sink;
+    private static final List<Consumer<MusicaPlaybackService>> PENDING = new ArrayList<>();
+
+    private ExoPlayer player;
+    private MediaSession session;
+
+    private final Runnable ticker = new Runnable() {
+        @Override public void run() {
+            emitState(null);
+            if (player != null && player.isPlaying()) MAIN.postDelayed(this, 500);
+        }
+    };
+
+    /** Executa um comando no player, sempre na thread principal. Inicia o serviço se preciso. */
+    static void run(Context ctx, Consumer<MusicaPlaybackService> cmd) {
+        MusicaPlaybackService s = instance;
+        if (s != null) {
+            MAIN.post(() -> safe(s, cmd));
+            return;
+        }
+        synchronized (PENDING) {
+            PENDING.add(cmd);
+        }
+        try {
+            ctx.startService(new Intent(ctx, MusicaPlaybackService.class));
+        } catch (Exception e) {
+            synchronized (PENDING) {
+                PENDING.clear();
+            }
+            EventSink k = sink;
+            if (k != null) {
+                JSObject o = new JSObject();
+                o.put("error", "Não consegui iniciar o serviço de áudio: " + e.getMessage());
+                k.emit("state", o);
+            }
+        }
+    }
+
+    private static void safe(MusicaPlaybackService s, Consumer<MusicaPlaybackService> cmd) {
+        try {
+            cmd.accept(s);
+        } catch (Exception e) {
+            s.emitState("Erro no player: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        player = new ExoPlayer.Builder(this)
+                .setAudioAttributes(new AudioAttributes.Builder()
+                        .setUsage(C.USAGE_MEDIA)
+                        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                        .build(), true)
+                .setHandleAudioBecomingNoisy(true)
+                .setWakeMode(C.WAKE_MODE_LOCAL)
+                .build();
+
+        player.addListener(new Player.Listener() {
+            @Override public void onIsPlayingChanged(boolean isPlaying) {
+                emitState(null);
+                MAIN.removeCallbacks(ticker);
+                if (isPlaying) MAIN.post(ticker);
+            }
+            @Override public void onPlaybackStateChanged(int state) { emitState(null); }
+            @Override public void onPlayWhenReadyChanged(boolean playWhenReady, int reason) { emitState(null); }
+            @Override public void onPlayerError(PlaybackException error) {
+                emitState("Não foi possível tocar esta música (" + error.getErrorCodeName() + ")");
+            }
+            @Override public void onMediaItemTransition(@Nullable MediaItem item, int reason) {
+                EventSink k = sink;
+                if (k != null && item != null) {
+                    JSObject o = new JSObject();
+                    o.put("id", item.mediaId);
+                    o.put("reason", reason);
+                    k.emit("transition", o);
+                }
+                emitState(null);
+            }
+        });
+
+        MediaSession.Builder b = new MediaSession.Builder(this, new Wrapper(player)).setId("musica");
+        Intent open = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        if (open != null) {
+            b.setSessionActivity(PendingIntent.getActivity(this, 0, open,
+                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        }
+        session = b.build();
+
+        instance = this;
+        List<Consumer<MusicaPlaybackService>> todo;
+        synchronized (PENDING) {
+            todo = new ArrayList<>(PENDING);
+            PENDING.clear();
+        }
+        for (Consumer<MusicaPlaybackService> c : todo) safe(this, c);
+    }
+
+    /** Faz os botões "anterior/próxima" da notificação funcionarem com a fila gerida pelo app. */
+    private class Wrapper extends ForwardingPlayer {
+        Wrapper(Player p) { super(p); }
+
+        @Override public Commands getAvailableCommands() {
+            return super.getAvailableCommands().buildUpon()
+                    .addAll(COMMAND_SEEK_TO_NEXT, COMMAND_SEEK_TO_PREVIOUS,
+                            COMMAND_SEEK_TO_NEXT_MEDIA_ITEM, COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                    .build();
+        }
+
+        @Override public boolean isCommandAvailable(int command) {
+            if (command == COMMAND_SEEK_TO_NEXT || command == COMMAND_SEEK_TO_PREVIOUS
+                    || command == COMMAND_SEEK_TO_NEXT_MEDIA_ITEM || command == COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM) {
+                return true;
+            }
+            return super.isCommandAvailable(command);
+        }
+
+        private void goNext() {
+            if (super.hasNextMediaItem()) super.seekToNextMediaItem();
+            else action("next");
+        }
+
+        private void goPrevious() {
+            if (getCurrentPosition() > 3000) seekTo(0);
+            else action("previous");
+        }
+
+        @Override public void seekToNext() { goNext(); }
+        @Override public void seekToNextMediaItem() { goNext(); }
+        @Override public void seekToPrevious() { goPrevious(); }
+        @Override public void seekToPreviousMediaItem() { goPrevious(); }
+    }
+
+    private void action(String name) {
+        EventSink k = sink;
+        if (k != null) {
+            JSObject o = new JSObject();
+            o.put("action", name);
+            k.emit("action", o);
+        }
+    }
+
+    // ---------- comandos (sempre chamados na thread principal via run) ----------
+    private static MediaItem buildItem(org.json.JSONObject o) {
+        String path = o.optString("path", "");
+        File f = new File(path);
+        if (!f.isFile() || !f.canRead()) return null;
+        MediaMetadata.Builder md = new MediaMetadata.Builder()
+                .setTitle(o.optString("title", "Música"))
+                .setArtist(o.optString("artist", ""));
+        String cover = o.optString("cover", "");
+        if (!cover.isEmpty() && new File(cover).isFile()) md.setArtworkUri(Uri.fromFile(new File(cover)));
+        return new MediaItem.Builder()
+                .setMediaId(o.optString("id", path))
+                .setUri(Uri.fromFile(f))
+                .setMediaMetadata(md.build())
+                .build();
+    }
+
+    static List<MediaItem> buildItems(org.json.JSONArray arr) {
+        List<MediaItem> list = new ArrayList<>();
+        if (arr == null) return list;
+        for (int i = 0; i < arr.length(); i++) {
+            MediaItem it = buildItem(arr.optJSONObject(i));
+            if (it != null) list.add(it);
+        }
+        return list;
+    }
+
+    void setQueue(List<MediaItem> items, boolean autoplay, long positionMs, boolean repeatOne) {
+        if (items.isEmpty()) {
+            emitState("Arquivo de música não encontrado no armazenamento do app.");
+            return;
+        }
+        player.setRepeatMode(repeatOne ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
+        player.setMediaItems(items, 0, Math.max(0L, positionMs));
+        player.prepare();
+        player.setPlayWhenReady(autoplay);
+        emitState(null);
+    }
+
+    void setUpcoming(String afterId, List<MediaItem> items, boolean repeatOne) {
+        player.setRepeatMode(repeatOne ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
+        MediaItem cur = player.getCurrentMediaItem();
+        if (cur == null || !cur.mediaId.equals(afterId)) return; // o app se atualiza pelo evento "transition"
+        int idx = player.getCurrentMediaItemIndex();
+        int n = player.getMediaItemCount();
+        if (n > idx + 1) player.removeMediaItems(idx + 1, n);
+        if (idx > 0) player.removeMediaItems(0, idx);
+        if (!items.isEmpty()) player.addMediaItems(items);
+    }
+
+    void play() { player.play(); }
+    void pause() { player.pause(); }
+    void seek(long ms) { player.seekTo(Math.max(0L, ms)); }
+    void rate(float r) { if (r > 0f && r <= 4f) player.setPlaybackSpeed(r); }
+    void repeatOne(boolean one) { player.setRepeatMode(one ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF); }
+    void stopAll() {
+        player.stop();
+        player.clearMediaItems();
+        emitState(null);
+    }
+
+    JSObject stateObject(String error) {
+        JSObject o = new JSObject();
+        MediaItem it = player.getCurrentMediaItem();
+        int st = player.getPlaybackState();
+        long dur = player.getDuration();
+        o.put("id", it == null ? "" : it.mediaId);
+        o.put("playing", player.getPlayWhenReady() && st != Player.STATE_ENDED && st != Player.STATE_IDLE);
+        o.put("position", Math.max(0L, player.getCurrentPosition()));
+        o.put("duration", dur == C.TIME_UNSET || dur < 0 ? 0L : dur);
+        o.put("state", st);
+        o.put("rate", (double) player.getPlaybackParameters().speed);
+        if (error != null) o.put("error", error);
+        return o;
+    }
+
+    private void emitState(String error) {
+        if (player == null) return;
+        EventSink k = sink;
+        if (k != null) k.emit("state", stateObject(error));
+    }
+
+    @Nullable
+    @Override
+    public MediaSession onGetSession(MediaSession.ControllerInfo controllerInfo) {
+        return session;
+    }
+
+    @Override
+    public void onTaskRemoved(@Nullable Intent rootIntent) {
+        // app removido dos recentes: se estiver tocando, continua (fila nativa);
+        // se estiver parado/pausado, encerra o serviço
+        if (player == null || !player.getPlayWhenReady()
+                || player.getPlaybackState() == Player.STATE_ENDED
+                || player.getPlaybackState() == Player.STATE_IDLE) {
+            stopSelf();
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        MAIN.removeCallbacks(ticker);
+        instance = null;
+        try {
+            if (session != null) {
+                session.getPlayer().release();
+                session.release();
+            }
+        } catch (Exception ignored) {}
+        session = null;
+        player = null;
+        super.onDestroy();
+    }
+}
