@@ -9,6 +9,7 @@ on:
     paths:
       - "index.html"
       - "script.js"
+      - "js/**"
       - "style.css"
       - "jsmediatags.min.js"
       - "manifest.json"
@@ -40,7 +41,7 @@ jobs:
 
       - name: Verificar sintaxe JavaScript
         run: |
-          node --check script.js
+          for f in js/*.js; do node --check "$f"; done
           node --check scripts/copy-web.js
           node --check scripts/patch-android.js
 

@@ -1,12 +1,23 @@
 // Service worker: mantém os arquivos do player disponíveis offline.
-const CACHE = "aplicativo-reprodutor-musica-v33";
+const CACHE = "aplicativo-reprodutor-musica-v34";
 const APP_CACHE_PREFIX = "aplicativo-reprodutor-musica-v";
 const LEGACY_CACHE_NAMES = new Set(["musica-v26"]);
 const CORE = [
   "./",
   "index.html",
   "style.css",
-  "script.js",
+  "js/00-erros.js",
+  "js/01-base.js",
+  "js/02-player-nativo.js",
+  "js/03-estado-cor-tema.js",
+  "js/04-navegacao-dialogos.js",
+  "js/05-importar.js",
+  "js/06-playlists-listas.js",
+  "js/07-reproducao.js",
+  "js/08-progresso-player-completo.js",
+  "js/09-ajustes.js",
+  "js/10-fontes-letras.js",
+  "js/11-inicio-pwa.js",
   "jsmediatags.min.js",
   "manifest.json",
   "icon-192.png",
