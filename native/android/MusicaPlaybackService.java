@@ -129,6 +129,9 @@ public class MusicaPlaybackService extends MediaSessionService {
                     PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
         }
         session = b.build();
+        // registra a sessão no serviço: sem isso o Media3 não vira serviço em primeiro plano
+        // nem mostra a notificação enquanto nenhum controlador estiver conectado
+        addSession(session);
 
         instance = this;
         List<Consumer<MusicaPlaybackService>> todo;
