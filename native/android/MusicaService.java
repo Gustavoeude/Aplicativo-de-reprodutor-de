@@ -156,7 +156,11 @@ public class MusicaService extends Service {
                 .putString(MediaMetadata.METADATA_KEY_TITLE, title)
                 .putString(MediaMetadata.METADATA_KEY_ARTIST, artist)
                 .putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs);
-        if (cover != null) md.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, cover);
+        if (cover != null) {
+            md.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, cover);
+            md.putBitmap(MediaMetadata.METADATA_KEY_ART, cover);
+            md.putBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON, cover);
+        }
         session.setMetadata(md.build());
 
         long actions = PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE

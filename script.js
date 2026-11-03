@@ -2366,20 +2366,22 @@ function sendNative() {
   } catch (_) {}
 }
 
-// capa pequena (JPEG 256px em base64) para a notificação
+// capa quadrada (JPEG 640px em base64) para a notificação e a tela de bloqueio
 function nativeCoverFor(song) {
   if (!song.cover) return Promise.resolve("");
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
       try {
-        const size = 256;
+        const size = 640;
         const c = document.createElement("canvas");
         c.width = c.height = size;
         const x = c.getContext("2d");
+        x.imageSmoothingEnabled = true;
+        x.imageSmoothingQuality = "high";
         const k = Math.max(size / img.width, size / img.height);
         x.drawImage(img, (size - img.width * k) / 2, (size - img.height * k) / 2, img.width * k, img.height * k);
-        resolve(c.toDataURL("image/jpeg", 0.8).split(",")[1] || "");
+        resolve(c.toDataURL("image/jpeg", 0.92).split(",")[1] || "");
       } catch (_) {
         resolve("");
       }
