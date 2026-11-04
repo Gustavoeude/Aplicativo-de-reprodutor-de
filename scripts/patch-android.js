@@ -26,11 +26,11 @@ if (!fs.existsSync(activityPath)) {
 }
 let activity = fs.readFileSync(activityPath, "utf8");
 if (!activity.includes("registerPlugin(MusicaPlugin.class)")) {
-  const onCreate = /(public\\s+void\\s+onCreate\\s*\\(\\s*Bundle\\s+\\w+\\s*\\)\\s*\\{)/;
+  const onCreate = /(public\s+void\s+onCreate\s*\(\s*Bundle\s+\w+\s*\)\s*\{)/;
   if (!onCreate.test(activity)) {
     throw new Error("Não foi possível localizar onCreate(Bundle) em MainActivity.java");
   }
-  activity = activity.replace(onCreate, "$1\\n        registerPlugin(MusicaPlugin.class);");
+  activity = activity.replace(onCreate, "$1\n        registerPlugin(MusicaPlugin.class);");
   fs.writeFileSync(activityPath, activity);
   console.log("plugin MusicaPlugin registrado na MainActivity");
 } else {
