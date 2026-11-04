@@ -192,6 +192,8 @@ function parseLrc(text) {
 
 function renderLyrics(song) {
   const box = $("fpLyrics");
+  const oldAdjust = $("lrcAdjust");
+  if (oldAdjust) oldAdjust.remove();
   box.innerHTML = "";
   lrcLines = [];
   lrcSynced = false;
@@ -253,7 +255,7 @@ function renderLyrics(song) {
     box.appendChild(p);
   });
 
-  if (lrcSynced) box.appendChild(buildLyricsAdjust());
+  if (lrcSynced) $("fpStage").appendChild(buildLyricsAdjust());
 
   if (song.lyricsSource === "lrclib") {
     const source = el("a", "lyrics-source", "Letra encontrada pelo LRCLIB");
@@ -321,9 +323,11 @@ function fmtOffset(v) {
 }
 
 function buildLyricsAdjust() {
-  const bar = el("div", "lrc-adjust");
+  const wrap = el("div", "lrc-adjust");
+  wrap.id = "lrcAdjust";
+  const panel = el("div", "lrc-adjust-panel");
   const label = el("span", "lrc-adjust-val", "");
-  const paint = () => { label.textContent = "Ajuste: " + fmtOffset(lyricsOffsetFor(currentId)); };
+  const paint = () => { label.textContent = fmtOffset(lyricsOffsetFor(currentId)); };
   const step = d => {
     setLyricsOffset(currentId, lyricsOffsetFor(currentId) + d);
     paint();
@@ -332,17 +336,25 @@ function buildLyricsAdjust() {
     lrcActive = -1;
     syncLyrics(audio.currentTime || 0);
   };
-  const minus = el("button", "lrc-adjust-btn", "−0,5 s");
+  const minus = el("button", "lrc-adjust-btn", "−0,5");
   minus.setAttribute("aria-label", "Atrasar a letra em meio segundo");
   minus.onclick = () => step(-0.5);
-  const plus = el("button", "lrc-adjust-btn", "+0,5 s");
+  const plus = el("button", "lrc-adjust-btn", "+0,5");
   plus.setAttribute("aria-label", "Adiantar a letra em meio segundo");
   plus.onclick = () => step(0.5);
   const reset = el("button", "lrc-adjust-btn", "Zerar");
   reset.onclick = () => { setLyricsOffset(currentId, 0); step(0); };
-  bar.append(minus, label, plus, reset);
+  panel.append(minus, label, plus, reset);
+
+  const toggle = el("button", "lrc-adjust-toggle", "Ajustar letra");
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.onclick = () => {
+    const open = wrap.classList.toggle("open");
+    toggle.setAttribute("aria-expanded", String(open));
+  };
+  wrap.append(panel, toggle);
   paint();
-  return bar;
+  return wrap;
 }
 
 function syncLyrics(t) {

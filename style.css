@@ -2381,14 +2381,24 @@ body.settings-open .bottom-nav { visibility: hidden; }
 
 /* ----- ajuste da letra ----- */
 .lrc-adjust {
-  position: sticky; bottom: 0; z-index: 2;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  margin: 18px auto 0; padding: 8px 10px; width: fit-content; max-width: 100%;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--md-surface) 82%, transparent);
+  position: absolute; right: 0; bottom: 2px; z-index: 3;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
 }
+.fp-stage:not(.lyrics-on) .lrc-adjust { display: none; }
+.lrc-adjust-toggle {
+  min-height: 34px; padding: 0 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  color: var(--md-on-surface);
+  background: color-mix(in srgb, var(--md-surface) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--md-on-surface) 22%, transparent);
+}
+.lrc-adjust-panel {
+  display: none; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--md-surface-container-high) 94%, transparent);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
+}
+.lrc-adjust.open .lrc-adjust-panel { display: flex; }
 .lrc-adjust-btn {
-  min-height: 36px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  min-height: 34px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
   background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
 }
-.lrc-adjust-val { font-size: 12.5px; color: var(--md-on-surface-variant); min-width: 84px; text-align: center; }
+.lrc-adjust-val { font-size: 12.5px; color: var(--md-on-surface-variant); min-width: 52px; text-align: center; }
