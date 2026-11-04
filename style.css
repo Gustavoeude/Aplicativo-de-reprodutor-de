@@ -2446,3 +2446,37 @@ body.settings-open .bottom-nav { visibility: hidden; }
   background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
 }
 .lrc-adjust-val { font-size: 12.5px; color: var(--md-on-surface-variant); min-width: 52px; text-align: center; }
+
+
+/* Correção do layout dos controles de papel de parede em telas estreitas */
+.settings-page .set-row.wallpaper-range-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(132px, 42%);
+  align-items: center;
+  column-gap: 14px;
+  width: 100%;
+}
+.settings-page .wallpaper-range-row .set-row-text {
+  min-width: 0;
+  width: auto;
+  flex: initial;
+}
+.settings-page .wallpaper-range-row .set-row-text strong,
+.settings-page .wallpaper-range-row .set-row-text span {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.settings-page .wallpaper-range-row .wallpaper-range {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  flex: initial;
+}
+@media (max-width: 380px) {
+  .settings-page .set-row.wallpaper-range-row {
+    grid-template-columns: minmax(0, 1fr) minmax(112px, 40%);
+    column-gap: 10px;
+  }
+}
