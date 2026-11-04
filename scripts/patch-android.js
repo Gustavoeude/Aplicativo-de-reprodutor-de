@@ -96,6 +96,14 @@ const adaptive =
 fs.mkdirSync(path.join(res, "mipmap-anydpi-v26"), { recursive: true });
 fs.writeFileSync(path.join(res, "mipmap-anydpi-v26/ic_launcher.xml"), adaptive);
 fs.writeFileSync(path.join(res, "mipmap-anydpi-v26/ic_launcher_round.xml"), adaptive);
+// ícone do botão "fechar" (X) do card de música
+fs.mkdirSync(path.join(res, "drawable"), { recursive: true });
+fs.writeFileSync(
+  path.join(res, "drawable/ic_fechar.xml"),
+  '<?xml version="1.0" encoding="utf-8"?>\n<vector xmlns:android="http://schemas.android.com/apk/res/android"\n' +
+  '    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">\n' +
+  '    <path android:fillColor="#FFFFFFFF" android:pathData="M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12z"/>\n</vector>\n'
+);
 console.log("ícone aplicado");
 
 // versionCode: sobe a cada build (necessário para atualizar por cima do app instalado)
