@@ -107,6 +107,15 @@ function chooseLyricsRecord(song, records, duration) {
       Number.isFinite(Number(record.duration)) && Math.abs(Number(record.duration) - duration) <= 5
     );
     if (durationMatches.length) candidates = durationMatches;
+    else if (candidates.some(record => Number.isFinite(Number(record.duration)))) {
+      // sem versão parecida: aceita só até 10 s de diferença; mais que isso é outra
+      // versão (remix, estendida...) e a letra sairia de sincronia
+      const near = candidates.filter(record =>
+        Number.isFinite(Number(record.duration)) && Math.abs(Number(record.duration) - duration) <= 10
+      );
+      if (!near.length) return null;
+      candidates = near;
+    }
   }
   if (!duration && candidates.length > 1) {
     const albums = new Set(candidates.map(record => normalizeLyricsLookup(record.albumName)).filter(Boolean));

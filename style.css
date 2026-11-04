@@ -2378,3 +2378,17 @@ body.settings-open .bottom-nav { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .settings-page, .settings-page.open { transition: none; }
 }
+
+/* ----- ajuste da letra ----- */
+.lrc-adjust {
+  position: sticky; bottom: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 18px auto 0; padding: 8px 10px; width: fit-content; max-width: 100%;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--md-surface) 82%, transparent);
+}
+.lrc-adjust-btn {
+  min-height: 36px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
+}
+.lrc-adjust-val { font-size: 12.5px; color: var(--md-on-surface-variant); min-width: 84px; text-align: center; }
