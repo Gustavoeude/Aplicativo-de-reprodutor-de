@@ -30,13 +30,18 @@ import android.util.Base64;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 /** Ponte entre o JavaScript do app e o serviço de reprodução em segundo plano. */
-@CapacitorPlugin(name = "MusicaNative")
+@CapacitorPlugin(name = "MusicaNative", permissions = {
+        @Permission(alias = "notifications", strings = {Manifest.permission.POST_NOTIFICATIONS})
+})
 public class MusicaPlugin extends Plugin {
 
     // ================= seleção nativa de pastas =================
@@ -215,14 +220,23 @@ public class MusicaPlugin extends Plugin {
     /** Android 13+: sem essa permissão a notificação de mídia fica escondida. */
     @PluginMethod
     public void requestNotifications(PluginCall call) {
-        try {
-            if (Build.VERSION.SDK_INT >= 33
-                    && ContextCompat.checkSelfPermission(getContext(), Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
-                getActivity().requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 4711);
-            }
-        } catch (Exception ignored) {}
-        call.resolve();
+        if (Build.VERSION.SDK_INT < 33 || getPermissionState("notifications") == PermissionState.GRANTED) {
+            resolveNotificationPermission(call);
+            return;
+        }
+        requestPermissionForAlias("notifications", call, "notificationsResult");
+    }
+
+    @PermissionCallback
+    private void notificationsResult(PluginCall call) {
+        resolveNotificationPermission(call);
+    }
+
+    private void resolveNotificationPermission(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("granted", Build.VERSION.SDK_INT < 33
+                || getPermissionState("notifications") == PermissionState.GRANTED);
+        call.resolve(result);
     }
 
     // ================= player nativo (Media3) =================
@@ -353,8 +367,10 @@ public class MusicaPlugin extends Plugin {
         final boolean autoplay = Boolean.TRUE.equals(call.getBoolean("autoplay", true));
         final long pos = (long) (double) call.getDouble("position", 0.0);
         final boolean one = Boolean.TRUE.equals(call.getBoolean("repeatOne", false));
-        MusicaPlaybackService.run(getContext(), s -> s.setQueue(list, autoplay, pos, one));
-        call.resolve();
+        MusicaPlaybackService.run(getContext(), s -> {
+            s.setQueue(list, autoplay, pos, one);
+            call.resolve();
+        }, e -> call.reject("Não foi possível iniciar a fila do player: " + e.getMessage()));
     }
 
     @PluginMethod
@@ -362,48 +378,66 @@ public class MusicaPlugin extends Plugin {
         final List<MediaItem> list = items(call);
         final String after = call.getString("afterId", "");
         final boolean one = Boolean.TRUE.equals(call.getBoolean("repeatOne", false));
-        MusicaPlaybackService.run(getContext(), s -> s.setUpcoming(after, list, one));
-        call.resolve();
+        MusicaPlaybackService.run(getContext(), s -> {
+            s.setUpcoming(after, list, one);
+            call.resolve();
+        }, e -> call.reject("Não foi possível atualizar a fila: " + e.getMessage()));
     }
 
     @PluginMethod
     public void play(PluginCall call) {
-        MusicaPlaybackService.run(getContext(), MusicaPlaybackService::play);
-        call.resolve();
+        MusicaPlaybackService.run(getContext(), s -> {
+            s.play();
+            call.resolve();
+        }, e -> call.reject("Não foi possível iniciar a reprodução: " + e.getMessage()));
     }
 
     @PluginMethod
     public void pause(PluginCall call) {
-        MusicaPlaybackService.run(getContext(), MusicaPlaybackService::pause);
-        call.resolve();
+        MusicaPlaybackService.run(getContext(), s -> {
+            s.pause();
+            call.resolve();
+        }, e -> call.reject("Não foi possível pausar a reprodução: " + e.getMessage()));
     }
 
     @PluginMethod
     public void seek(PluginCall call) {
         final long ms = (long) (double) call.getDouble("position", 0.0);
-        MusicaPlaybackService.run(getContext(), s -> s.seek(ms));
-        call.resolve();
+        MusicaPlaybackService.run(getContext(), s -> {
+            s.seek(ms);
+            call.resolve();
+        }, e -> call.reject("Não foi possível buscar a posição: " + e.getMessage()));
     }
 
     @PluginMethod
     public void setRate(PluginCall call) {
         final float r = (float) (double) call.getDouble("rate", 1.0);
-        MusicaPlaybackService.run(getContext(), s -> s.rate(r));
-        call.resolve();
+        MusicaPlaybackService.run(getContext(), s -> {
+            s.rate(r);
+            call.resolve();
+        }, e -> call.reject("Não foi possível alterar a velocidade: " + e.getMessage()));
     }
 
     @PluginMethod
     public void setRepeat(PluginCall call) {
         final boolean one = Boolean.TRUE.equals(call.getBoolean("repeatOne", false));
-        MusicaPlaybackService.run(getContext(), s -> s.repeatOne(one));
-        call.resolve();
+        MusicaPlaybackService.run(getContext(), s -> {
+            s.repeatOne(one);
+            call.resolve();
+        }, e -> call.reject("Não foi possível alterar a repetição: " + e.getMessage()));
     }
 
     @PluginMethod
     public void stopPlayer(PluginCall call) {
         MusicaPlaybackService s = MusicaPlaybackService.instance;
-        if (s != null) MusicaPlaybackService.run(getContext(), MusicaPlaybackService::stopAll);
-        call.resolve();
+        if (s == null) {
+            call.resolve();
+            return;
+        }
+        MusicaPlaybackService.run(getContext(), svc -> {
+            svc.stopAll();
+            call.resolve();
+        }, e -> call.reject("Não foi possível parar o player: " + e.getMessage()));
     }
 
     @PluginMethod
@@ -419,7 +453,8 @@ public class MusicaPlugin extends Plugin {
             call.resolve(o);
             return;
         }
-        MusicaPlaybackService.run(getContext(), svc -> call.resolve(svc.stateObject(null)));
+        MusicaPlaybackService.run(getContext(), svc -> call.resolve(svc.stateObject(null)),
+                e -> call.reject("Não foi possível consultar o player: " + e.getMessage()));
     }
 
     @PluginMethod

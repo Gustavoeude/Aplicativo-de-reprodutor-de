@@ -46,7 +46,7 @@ jobs:
           node --check scripts/patch-android.js
 
       - name: Instalar dependências
-        run: npm install
+        run: npm ci
 
       - name: Preparar arquivos web
         run: npm run build:web

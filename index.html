@@ -113,10 +113,10 @@
   <!-- Mini player global -->
   <div class="now-playing" id="nowPlaying" hidden>
     <div class="now-cover" id="nowCover"></div>
-    <div class="now-info">
+    <button class="now-info" id="nowInfo" type="button" aria-label="Abrir player completo">
       <strong id="nowTitle">Nenhuma música</strong>
       <span id="nowArtist">Adicione músicas na Library</span>
-    </div>
+    </button>
     <button class="now-lyrics" id="nowLyrics" aria-label="Abrir letras da música atual">
       <span class="material-symbols-rounded" aria-hidden="true">lyrics</span>
       <span>Letra</span>
@@ -127,7 +127,7 @@
 
   <!-- Navegação (Material 3 Navigation Bar) -->
   <nav class="bottom-nav">
-    <button class="nav-item active" data-target="home">
+    <button class="nav-item active" data-target="home" aria-current="page">
       <span class="nav-icon"><span class="material-symbols-rounded">person</span></span>
       <small>Your Mix</small>
     </button>
@@ -181,7 +181,7 @@
     </div>
 
     <div class="fp-controls">
-      <button class="icon-btn" id="fpShuffle" aria-label="Aleatório">
+      <button class="icon-btn" id="fpShuffle" aria-label="Aleatório desligado" aria-pressed="false">
         <span class="material-symbols-rounded">shuffle</span>
       </button>
       <button class="icon-btn big" id="fpPrev" aria-label="Anterior">
@@ -191,7 +191,7 @@
       <button class="icon-btn big" id="fpNext" aria-label="Próxima">
         <span class="material-symbols-rounded">skip_next</span>
       </button>
-      <button class="icon-btn" id="fpRepeat" aria-label="Repetir">
+      <button class="icon-btn" id="fpRepeat" aria-label="Repetir desligado" aria-pressed="false">
         <span class="material-symbols-rounded">repeat</span>
       </button>
     </div>

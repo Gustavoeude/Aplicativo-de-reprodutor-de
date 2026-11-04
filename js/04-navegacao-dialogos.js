@@ -55,7 +55,10 @@ function openPage(name, opts) {
   }
 
   document.querySelectorAll(".nav-item").forEach(b => {
-    b.classList.toggle("active", b.dataset.target === name);
+    const active = b.dataset.target === name;
+    b.classList.toggle("active", active);
+    if (active) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
   });
 
   window.scrollTo({ top: 0, behavior: same ? "smooth" : "auto" });
@@ -231,6 +234,7 @@ let modalTitleSerial = 0;
 function activeModalElement() {
   if (activeDialog) return activeDialog.dlg;
   if (activeSheet) return activeSheet.sheet;
+  if (settingsOpen) return settingsEl;
   return fpOpen ? $("fullPlayer") : null;
 }
 
@@ -242,6 +246,7 @@ document.addEventListener("keydown", e => {
     e.preventDefault();
     if (activeDialog) activeDialog.done(null);
     else if (activeSheet) closeSheet();
+    else if (settingsOpen) closeSettings();
     else if (fpOpen) closeFullPlayer();
     return;
   }
@@ -397,4 +402,3 @@ function showDialog({ title, text, input, confirmLabel = "OK", danger = false })
     });
   });
 }
-

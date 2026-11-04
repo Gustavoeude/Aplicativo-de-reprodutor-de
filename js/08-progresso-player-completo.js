@@ -135,11 +135,16 @@ function updateFullPlayer() {
   $("fpFav").classList.toggle("active", song.favorite);
   setFavoriteControl($("fpFav"), song);
 
-  $("fpShuffle").classList.toggle("on", shuffle);
+  const sh = $("fpShuffle");
+  sh.classList.toggle("on", shuffle);
+  sh.setAttribute("aria-pressed", String(shuffle));
+  sh.setAttribute("aria-label", shuffle ? "Aleatório ligado" : "Aleatório desligado");
 
   const rep = $("fpRepeat");
   rep.classList.toggle("on", repeat !== "off");
   setIcon(rep, repeat === "one" ? "repeat_one" : "repeat");
+  rep.setAttribute("aria-pressed", String(repeat !== "off"));
+  rep.setAttribute("aria-label", repeat === "one" ? "Repetir esta música" : repeat === "all" ? "Repetir lista" : "Repetir desligado");
 
   $("fpLyricsBtn").classList.toggle("on", lyricsView);
   $("fpLyricsBtn").setAttribute("aria-pressed", String(lyricsView));
@@ -239,4 +244,3 @@ $("fpLyricsBtn").onclick = () => {
     requestAnimationFrame(scrollLyricsToActive);
   }
 };
-
