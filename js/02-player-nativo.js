@@ -160,7 +160,9 @@ class NativeAudio {
 
     this._ended = false;
     this.setPlaying(!!st.playing);
-    this._posAt = this.paused ? 0 : performance.now();
+    // a posição foi lida no Android um pouco antes de chegar aqui: soma esse atraso
+    const lat = st.ts ? Math.min(1500, Math.max(0, Date.now() - st.ts)) : 0;
+    this._posAt = this.paused ? 0 : performance.now() - lat;
     if (!wasPaused || !this.paused) this._emit("timeupdate");
   }
 }

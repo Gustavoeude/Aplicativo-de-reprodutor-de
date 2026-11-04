@@ -152,6 +152,8 @@ let lrcActive = -1;
 function parseLrc(text) {
   const lines = [];
   let synced = false;
+  const off = /^\s*\[offset:\s*([+-]?\d+)\s*\]/im.exec(text);
+  const fileOffset = off ? Number(off[1]) / 1000 : 0; // ms; positivo = letra antes
 
   text.split(/\r?\n/).forEach(raw => {
     const stamps = Array.from(
@@ -172,7 +174,7 @@ function parseLrc(text) {
     stamps.forEach(m => {
       const frac = m[3] ? Number(m[3]) / Math.pow(10, m[3].length) : 0;
       lines.push({
-        t: Number(m[1]) * 60 + Number(m[2]) + frac,
+        t: Number(m[1]) * 60 + Number(m[2]) + frac - fileOffset,
         text: content || "♪"
       });
     });
@@ -190,6 +192,8 @@ function parseLrc(text) {
 
 function renderLyrics(song) {
   const box = $("fpLyrics");
+  const oldAdjust = $("lrcAdjust");
+  if (oldAdjust) oldAdjust.remove();
   box.innerHTML = "";
   lrcLines = [];
   lrcSynced = false;
@@ -244,12 +248,14 @@ function renderLyrics(song) {
 
     if (lrcSynced) {
       p.onclick = () => {
-        audio.currentTime = line.t;
+        audio.currentTime = Math.max(0, line.t - lyricsAdjust());
       };
     }
 
     box.appendChild(p);
   });
+
+  if (lrcSynced) $("fpStage").appendChild(buildLyricsAdjust());
 
   if (song.lyricsSource === "lrclib") {
     const source = el("a", "lyrics-source", "Letra encontrada pelo LRCLIB");
@@ -294,10 +300,67 @@ function startLyricsSyncLoop() {
   lyricsSyncFrame = requestAnimationFrame(tick);
 }
 
+const LYRICS_LEAD = 0.25; // a linha acende um pouco antes, para parecer em sincronia
+
+function lyricsOffsetFor(id) {
+  const m = lsGet("lyricsOffsets", {});
+  return Number(m && m[id]) || 0;
+}
+
+function setLyricsOffset(id, v) {
+  const m = lsGet("lyricsOffsets", {}) || {};
+  if (Math.abs(v) < 0.05) delete m[id];
+  else m[id] = Math.round(v * 10) / 10;
+  lsSet("lyricsOffsets", m);
+}
+
+function lyricsAdjust() {
+  return LYRICS_LEAD + lyricsOffsetFor(currentId);
+}
+
+function fmtOffset(v) {
+  return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1).replace(".", ",") + " s";
+}
+
+function buildLyricsAdjust() {
+  const wrap = el("div", "lrc-adjust");
+  wrap.id = "lrcAdjust";
+  const panel = el("div", "lrc-adjust-panel");
+  const label = el("span", "lrc-adjust-val", "");
+  const paint = () => { label.textContent = fmtOffset(lyricsOffsetFor(currentId)); };
+  const step = d => {
+    setLyricsOffset(currentId, lyricsOffsetFor(currentId) + d);
+    paint();
+    const nodes = $("fpLyrics").children;
+    if (nodes[lrcActive]) nodes[lrcActive].classList.remove("active");
+    lrcActive = -1;
+    syncLyrics(audio.currentTime || 0);
+  };
+  const minus = el("button", "lrc-adjust-btn", "−0,5");
+  minus.setAttribute("aria-label", "Atrasar a letra em meio segundo");
+  minus.onclick = () => step(-0.5);
+  const plus = el("button", "lrc-adjust-btn", "+0,5");
+  plus.setAttribute("aria-label", "Adiantar a letra em meio segundo");
+  plus.onclick = () => step(0.5);
+  const reset = el("button", "lrc-adjust-btn", "Zerar");
+  reset.onclick = () => { setLyricsOffset(currentId, 0); step(0); };
+  panel.append(minus, label, plus, reset);
+
+  const toggle = el("button", "lrc-adjust-toggle", "Ajustar letra");
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.onclick = () => {
+    const open = wrap.classList.toggle("open");
+    toggle.setAttribute("aria-expanded", String(open));
+  };
+  wrap.append(panel, toggle);
+  paint();
+  return wrap;
+}
+
 function syncLyrics(t) {
   if (!lrcSynced || lrcLines.length === 0) return;
 
-  const target = t;
+  const target = t + lyricsAdjust();
   let lo = 0;
   let hi = lrcLines.length - 1;
   let idx = -1;

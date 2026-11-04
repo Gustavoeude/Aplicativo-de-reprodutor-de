@@ -259,6 +259,7 @@ public class MusicaPlaybackService extends MediaSessionService {
         o.put("position", Math.max(0L, player.getCurrentPosition()));
         o.put("duration", dur == C.TIME_UNSET || dur < 0 ? 0L : dur);
         o.put("state", st);
+        o.put("ts", System.currentTimeMillis()); // para o app compensar o atraso da ponte
         o.put("rate", (double) player.getPlaybackParameters().speed);
         if (error != null) o.put("error", error);
         return o;
