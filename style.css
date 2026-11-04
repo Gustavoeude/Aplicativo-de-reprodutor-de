@@ -2565,3 +2565,22 @@ body.settings-open .bottom-nav { visibility: hidden; }
   font-size: 12px;
 }
 .more-upcoming .material-symbols-rounded { color: var(--md-primary); }
+
+
+.more-row-status {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container-highest);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.more-history {
+  scroll-margin-top: 24px;
+}
+.more-row:focus-visible, .more-history-row:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 3px;
+}
