@@ -76,7 +76,7 @@ document.querySelectorAll(".nav-item").forEach(b => {
   let active = false, engaged = false, page = null;
   let peekName = null, peekEl = null;
 
-  const BLOCK = ".hscroll, .filters, input, textarea, .seek-wrap, .sheet, .dialog, .scrim, .full-player, .now-playing, .bottom-nav, .playlist-bar";
+  const BLOCK = ".hscroll, .filters, input, textarea, .seek-wrap, .sheet, .dialog, .scrim, .full-player, .now-playing, .bottom-nav, .playlist-bar, .settings-page";
   const EASE = "cubic-bezier(.22, 1, .36, 1)";
 
   function neighborFor(delta) {

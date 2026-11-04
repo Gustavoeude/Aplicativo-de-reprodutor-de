@@ -130,6 +130,7 @@ async function importFontFile(file) {
   settings.font = id;
   saveSettings();
   applyFont();
+  refreshSettingsPage();
   showToast("Fonte “" + rec.name + "” adicionada");
 }
 
@@ -139,7 +140,7 @@ $("fontInput").addEventListener("change", () => {
   $("fontInput").value = "";
 });
 
-$("homeSettings").onclick = openSettings;
+$("homeSettings").onclick = () => openSettings();
 
 /* ==========================================================
    Letras (.lrc)
