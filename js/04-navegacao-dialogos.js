@@ -79,12 +79,16 @@ function renderMore() {
   if (!root) return;
   root.replaceChildren();
 
+  const history = el("section", "more-history");
+  history.id = "moreHistory";
+
   const items = [
     { icon: "palette", title: "Personalização", desc: "Temas, cores, fontes e papel de parede", run: () => openSettings("aparencia") },
-    { icon: "library_music", title: "Biblioteca e importação", desc: "Importar músicas e pastas", run: () => openSettings("biblioteca") },
-    { icon: "settings", title: "Configurações", desc: "Ajustes gerais e comportamento", run: () => openSettings() },
-    { icon: "music_note", title: "Reprodução", desc: "Opções do player e segundo plano", run: () => openSettings("reproducao") },
-    { icon: "bug_report", title: "Diagnóstico", desc: "Consultar o registro de erros", run: () => openSettings("diagnostico") }
+    { icon: "graphic_eq", title: "Equalizador", desc: "Ajustes de áudio", status: "Em breve", run: () => showToast("O equalizador ainda está em desenvolvimento.") },
+    { icon: "history", title: "Histórico", desc: "Veja as músicas tocadas recentemente", run: () => history.scrollIntoView({ behavior: "smooth", block: "start" }) },
+    { icon: "timer", title: "Temporizador", desc: "Programar o fim da reprodução", status: "Em breve", run: () => showToast("O temporizador ainda está em desenvolvimento.") },
+    { icon: "settings", title: "Configurações", desc: "Ajustes gerais do aplicativo", run: () => openSettings() },
+    { icon: "info", title: "Sobre", desc: "Informações sobre o reprodutor", run: () => showDialog({ title: "Sobre o Música", text: "Um reprodutor de música local, com sua biblioteca, capas, letras e opções de personalização.", confirmLabel: "Fechar" }) }
   ];
 
   const list = el("div", "more-list");
@@ -93,16 +97,20 @@ function renderMore() {
     const icon = el("span", "more-row-icon material-symbols-rounded", item.icon);
     const copy = el("span", "more-row-copy");
     copy.append(el("strong", "", item.title), el("small", "", item.desc));
-    button.append(icon, copy, el("span", "more-row-arrow material-symbols-rounded", "chevron_right"));
+    button.append(icon, copy);
+    if (item.status) {
+      button.appendChild(el("span", "more-row-status", item.status));
+    } else {
+      button.appendChild(el("span", "more-row-arrow material-symbols-rounded", "chevron_right"));
+    }
     button.addEventListener("click", item.run);
     list.appendChild(button);
   });
   root.appendChild(list);
 
-  const history = el("section", "more-history");
-  history.appendChild(el("h2", "page-section-title", "Tocadas recentemente"));
-  const recent = [...new Set((playHistory || []).slice(-12).reverse())]
-    .map(id => getSong(id)).filter(Boolean).slice(0, 6);
+  history.appendChild(el("h2", "page-section-title", "Histórico"));
+  const recent = [...new Set((playHistory || []).slice(-50).reverse())]
+    .map(id => getSong(id)).filter(Boolean).slice(0, 12);
 
   if (!recent.length) {
     history.appendChild(el("p", "more-empty", "As músicas que você reproduzir aparecerão aqui."));
@@ -121,13 +129,6 @@ function renderMore() {
     history.appendChild(songsBox);
   }
   root.appendChild(history);
-
-  const upcoming = el("div", "more-upcoming");
-  upcoming.append(
-    el("span", "material-symbols-rounded", "graphic_eq"),
-    el("span", "", "Equalizador e temporizador: recursos planejados para uma próxima etapa.")
-  );
-  root.appendChild(upcoming);
 }
 
 /* ==========================================================
