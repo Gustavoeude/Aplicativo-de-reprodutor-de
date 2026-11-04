@@ -519,14 +519,41 @@ async function importFolder() {
       const found = [];
 
       for (const item of (listing.files || [])) {
-        const result = await MN.readFolderFile({ uri: item.uri });
-        const binary = atob(result.base64 || "");
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        const file = new File([bytes], item.name, {
-          type: item.mimeType || "application/octet-stream",
-          lastModified: Date.now()
-        });
+        let file;
+        if (typeof MN.readFolderFileChunk === "function") {
+          // Blocos pequenos evitam manter uma Base64 enorme na memória do WebView.
+          const parts = [];
+          let offset = 0;
+          let done = false;
+          while (!done) {
+            const chunk = await MN.readFolderFileChunk({
+              uri: item.uri,
+              offset,
+              chunkSize: 512 * 1024
+            });
+            const binary = atob(chunk.base64 || "");
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            if (bytes.length) parts.push(bytes);
+            offset = Number(chunk.nextOffset) || (offset + bytes.length);
+            done = !!chunk.done;
+            if (!bytes.length && !done) throw new Error("O Android não retornou dados do arquivo.");
+          }
+          file = new File(parts, item.name, {
+            type: item.mimeType || "application/octet-stream",
+            lastModified: Date.now()
+          });
+        } else {
+          // Compatibilidade com APKs que ainda não possuem a leitura em blocos.
+          const result = await MN.readFolderFile({ uri: item.uri });
+          const binary = atob(result.base64 || "");
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          file = new File([bytes], item.name, {
+            type: item.mimeType || "application/octet-stream",
+            lastModified: Date.now()
+          });
+        }
         try {
           Object.defineProperty(file, "sourcePath", { value: item.relativePath || item.name });
         } catch (e) { logErr("importar:523", e); }
