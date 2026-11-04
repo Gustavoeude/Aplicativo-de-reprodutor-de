@@ -2480,3 +2480,88 @@ body.settings-open .bottom-nav { visibility: hidden; }
     column-gap: 10px;
   }
 }
+
+
+/* ---------- Página Mais ---------- */
+.more-content {
+  padding: 0 20px calc(120px + env(safe-area-inset-bottom));
+}
+.more-list, .more-history-list {
+  display: grid;
+  gap: 10px;
+}
+.more-row, .more-history-row {
+  width: 100%;
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  text-align: left;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container);
+  border: 1px solid color-mix(in srgb, var(--md-outline-variant) 24%, transparent);
+  border-radius: 22px;
+  transition: transform .25s var(--spring), background-color .25s ease;
+}
+.more-row:active, .more-history-row:active { transform: scale(.98); }
+.more-row-icon {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: var(--md-primary);
+  background: var(--md-secondary-container);
+  font-size: 24px;
+}
+.more-row-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.more-row-copy strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+.more-row-copy small {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+}
+.more-row-arrow { color: var(--md-on-surface-variant); }
+.more-history { margin-top: 28px; }
+.more-history .page-section-title { margin: 0 0 14px; }
+.more-history-row { min-height: 66px; }
+.more-history-cover {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--md-surface-container-high);
+  background-position: center;
+  background-size: cover;
+}
+.more-history-row > .material-symbols-rounded { color: var(--md-primary); }
+.more-empty {
+  padding: 18px;
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container);
+  border-radius: 18px;
+  font-size: 13px;
+}
+.more-upcoming {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container);
+  font-size: 12px;
+}
+.more-upcoming .material-symbols-rounded { color: var(--md-primary); }
