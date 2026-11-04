@@ -151,10 +151,33 @@ function updateFullPlayer() {
 
 let fpReturnFocus = null;
 
+// o player completo cresce a partir do retângulo do mini player (container transform)
+function setFpOrigin() {
+  const fp = $("fullPlayer");
+  const np = $("nowPlaying");
+  const set = (k, v) => fp.style.setProperty(k, v);
+  fp.style.transition = "none";
+  const r = np && !np.hidden ? np.getBoundingClientRect() : null;
+  if (r && r.width) {
+    set("--ct", r.top + "px");
+    set("--cl", r.left + "px");
+    set("--cr", (window.innerWidth - r.right) + "px");
+    set("--cb", (window.innerHeight - r.bottom) + "px");
+  } else {
+    set("--ct", "100%");
+    set("--cl", "0px");
+    set("--cr", "0px");
+    set("--cb", "0px");
+  }
+  void fp.offsetWidth;
+  fp.style.transition = "";
+}
+
 function openFullPlayer() {
   if (!current()) return;
 
   updateFullPlayer();
+  if (!fpOpen) setFpOrigin();
   $("fullPlayer").classList.add("open");
   $("fullPlayer").setAttribute("aria-hidden", "false");
   document.body.classList.add("no-scroll");

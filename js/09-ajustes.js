@@ -356,6 +356,9 @@ function settingsGo(p, fromPop) {
   settingsPage = p;
   renderSettingsPage(settingsEl, settingsGo);
   settingsEl.scrollTop = 0;
+  settingsEl.classList.remove("swap");
+  void settingsEl.offsetWidth;
+  settingsEl.classList.add("swap");
 }
 
 function refreshSettingsPage() {

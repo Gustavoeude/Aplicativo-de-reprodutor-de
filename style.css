@@ -2402,3 +2402,73 @@ body.settings-open .bottom-nav { visibility: hidden; }
   background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
 }
 .lrc-adjust-val { font-size: 12.5px; color: var(--md-on-surface-variant); min-width: 52px; text-align: center; }
+
+/* ==========================================================
+   Animações estilo PixelPlay: fade-through (trocas de tela)
+   e container transform (mini player vira player completo)
+   ========================================================== */
+:root {
+  --em-dec: cubic-bezier(.05, .7, .1, 1);
+  --em-acc: cubic-bezier(.3, 0, .8, .15);
+}
+
+/* troca de página: a antiga some rápido, a nova aparece com leve crescimento */
+.page.enter-from-right,
+.page.enter-from-left { animation: ftIn .24s var(--em-dec) .08s backwards; }
+.page.leave-left,
+.page.leave-right { animation: ftOut .1s var(--em-acc) forwards; }
+@keyframes ftIn { from { opacity: 0; transform: scale(.94); } }
+@keyframes ftOut { to { opacity: 0; } }
+
+/* sem cascata: o conteúdo já vem junto com a página */
+.stagger .home-top, .stagger .hero-copy, .stagger .page-heading, .stagger .search-box,
+.stagger .filters, .stagger .playlist-bar, .stagger .home-stats, .stagger .home-section,
+.stagger .library-add-button, .stagger .empty-state, .stagger .hero-play,
+.stagger .song-item, .stagger .h-card, .stagger .stat { animation: none !important; }
+
+/* Ajustes: mesma ideia, com fade e crescimento */
+.settings-page {
+  transform: scale(.94);
+  opacity: 0;
+  transition: transform .3s var(--em-acc), opacity .15s ease, visibility 0s linear .3s;
+}
+.settings-page.open {
+  transform: none;
+  opacity: 1;
+  transition: transform .32s var(--em-dec), opacity .22s ease .04s, visibility 0s;
+}
+.settings-page.swap > * { animation: ftIn .22s var(--em-dec) backwards; }
+
+/* player completo: abre a partir do retângulo do mini player */
+.full-player {
+  transform: none;
+  clip-path: inset(var(--ct, 100%) var(--cr, 0px) var(--cb, 0px) var(--cl, 0px) round 28px);
+  transition: clip-path .3s var(--em-acc), visibility 0s linear .3s;
+}
+.full-player.open {
+  transform: none;
+  clip-path: inset(0px 0px 0px 0px round 0px);
+  transition: clip-path .5s var(--em-dec), visibility 0s;
+}
+.full-player .fp-top,
+.full-player .fp-stage {
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.full-player.open .fp-top,
+.full-player.open .fp-stage {
+  opacity: 1;
+  transition: opacity .3s ease .12s;
+}
+.full-player .fp-meta,
+.full-player .fp-viz,
+.full-player .fp-progress,
+.full-player .fp-controls { translate: 0 12px; }
+.full-player.open .fp-meta,
+.full-player.open .fp-viz,
+.full-player.open .fp-progress,
+.full-player.open .fp-controls { transition: opacity .3s ease, translate .4s var(--em-dec); }
+.full-player.open .fp-meta     { transition-delay: .12s; }
+.full-player.open .fp-viz      { transition-delay: .16s; }
+.full-player.open .fp-progress { transition-delay: .2s; }
+.full-player.open .fp-controls { transition-delay: .24s; }
