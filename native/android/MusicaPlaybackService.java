@@ -83,7 +83,8 @@ public class MusicaPlaybackService extends MediaSessionService {
         PendingCommand pending = new PendingCommand(cmd, onError);
         MusicaPlaybackService s = instance;
         if (s != null) {
-            MAIN.post(() -> safe(s, pending));
+            MusicaPlaybackService ready = s;
+            MAIN.post(() -> safe(ready, pending));
             return;
         }
         synchronized (PENDING) {
