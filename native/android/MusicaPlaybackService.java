@@ -4,6 +4,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -16,8 +17,16 @@ import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.session.CommandButton;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
+import androidx.media3.session.SessionCommand;
+import androidx.media3.session.SessionCommands;
+import androidx.media3.session.SessionResult;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 
 import com.getcapacitor.JSObject;
 
@@ -122,7 +131,37 @@ public class MusicaPlaybackService extends MediaSessionService {
             }
         });
 
+        final SessionCommand closeCmd = new SessionCommand("musica.fechar", Bundle.EMPTY);
         MediaSession.Builder b = new MediaSession.Builder(this, new Wrapper(player)).setId("musica");
+        b.setCallback(new MediaSession.Callback() {
+            @Override
+            public MediaSession.ConnectionResult onConnect(MediaSession s, MediaSession.ControllerInfo controller) {
+                SessionCommands cmds = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
+                        .buildUpon().add(closeCmd).build();
+                return new MediaSession.ConnectionResult.AcceptedResultBuilder(s)
+                        .setAvailableSessionCommands(cmds)
+                        .build();
+            }
+
+            @Override
+            public ListenableFuture<SessionResult> onCustomCommand(MediaSession s, MediaSession.ControllerInfo controller,
+                                                                   SessionCommand cmd, Bundle args) {
+                if ("musica.fechar".equals(cmd.customAction)) {
+                    closeFromNotification();
+                    return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS));
+                }
+                return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED));
+            }
+        });
+        int closeIcon = getResources().getIdentifier("ic_fechar", "drawable", getPackageName());
+        if (closeIcon != 0) {
+            b.setMediaButtonPreferences(ImmutableList.of(
+                    new CommandButton.Builder(CommandButton.ICON_UNDEFINED)
+                            .setCustomIconResId(closeIcon)
+                            .setDisplayName("Fechar")
+                            .setSessionCommand(closeCmd)
+                            .build()));
+        }
         Intent open = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (open != null) {
             b.setSessionActivity(PendingIntent.getActivity(this, 0, open,
@@ -243,6 +282,24 @@ public class MusicaPlaybackService extends MediaSessionService {
     void seek(long ms) { player.seekTo(Math.max(0L, ms)); }
     void rate(float r) { if (r > 0f && r <= 4f) player.setPlaybackSpeed(r); }
     void repeatOne(boolean one) { player.setRepeatMode(one ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF); }
+    /** Botão X da notificação: para a música e tira o card. */
+    void closeFromNotification() {
+        try {
+            EventSink k = sink;
+            if (k != null) {
+                JSObject o = stateObject(null);
+                o.put("playing", false);
+                o.put("state", 1);
+                k.emit("state", o);
+            }
+        } catch (Exception ignored) {}
+        try {
+            player.stop();
+            player.clearMediaItems();
+        } catch (Exception ignored) {}
+        pauseAllPlayersAndStopSelf();
+    }
+
     void stopAll() {
         player.stop();
         player.clearMediaItems();
