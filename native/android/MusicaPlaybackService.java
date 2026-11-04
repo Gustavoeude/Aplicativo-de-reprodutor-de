@@ -9,6 +9,7 @@ import android.os.Handler;
 import android.os.Looper;
 
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.ForwardingPlayer;
@@ -51,7 +52,21 @@ public class MusicaPlaybackService extends MediaSessionService {
     static final Handler MAIN = new Handler(Looper.getMainLooper());
     static volatile MusicaPlaybackService instance;
     static volatile EventSink sink;
-    private static final List<Consumer<MusicaPlaybackService>> PENDING = new ArrayList<>();
+    private static final List<PendingCommand> PENDING = new ArrayList<>();
+
+    private static final class PendingCommand {
+        final Consumer<MusicaPlaybackService> command;
+        final Consumer<Exception> onError;
+
+        PendingCommand(Consumer<MusicaPlaybackService> command, Consumer<Exception> onError) {
+            this.command = command;
+            this.onError = onError;
+        }
+
+        void reject(Exception error) {
+            if (onError != null) onError.accept(error);
+        }
+    }
 
     private ExoPlayer player;
     private MediaSession session;
@@ -64,21 +79,32 @@ public class MusicaPlaybackService extends MediaSessionService {
     };
 
     /** Executa um comando no player, sempre na thread principal. Inicia o serviço se preciso. */
-    static void run(Context ctx, Consumer<MusicaPlaybackService> cmd) {
+    static void run(Context ctx, Consumer<MusicaPlaybackService> cmd, Consumer<Exception> onError) {
+        PendingCommand pending = new PendingCommand(cmd, onError);
         MusicaPlaybackService s = instance;
         if (s != null) {
-            MAIN.post(() -> safe(s, cmd));
+            MusicaPlaybackService ready = s;
+            MAIN.post(() -> safe(ready, pending));
             return;
         }
         synchronized (PENDING) {
-            PENDING.add(cmd);
+            s = instance;
+            if (s == null) PENDING.add(pending);
+        }
+        if (s != null) {
+            MusicaPlaybackService ready = s;
+            MAIN.post(() -> safe(ready, pending));
+            return;
         }
         try {
-            ctx.startService(new Intent(ctx, MusicaPlaybackService.class));
+            ContextCompat.startForegroundService(ctx, new Intent(ctx, MusicaPlaybackService.class));
         } catch (Exception e) {
+            List<PendingCommand> failed;
             synchronized (PENDING) {
+                failed = new ArrayList<>(PENDING);
                 PENDING.clear();
             }
+            for (PendingCommand command : failed) command.reject(e);
             EventSink k = sink;
             if (k != null) {
                 JSObject o = new JSObject();
@@ -88,11 +114,12 @@ public class MusicaPlaybackService extends MediaSessionService {
         }
     }
 
-    private static void safe(MusicaPlaybackService s, Consumer<MusicaPlaybackService> cmd) {
+    private static void safe(MusicaPlaybackService s, PendingCommand pending) {
         try {
-            cmd.accept(s);
+            pending.command.accept(s);
         } catch (Exception e) {
             s.emitState("Erro no player: " + e.getMessage());
+            pending.reject(e);
         }
     }
 
@@ -173,12 +200,12 @@ public class MusicaPlaybackService extends MediaSessionService {
         addSession(session);
 
         instance = this;
-        List<Consumer<MusicaPlaybackService>> todo;
+        List<PendingCommand> todo;
         synchronized (PENDING) {
             todo = new ArrayList<>(PENDING);
             PENDING.clear();
         }
-        for (Consumer<MusicaPlaybackService> c : todo) safe(this, c);
+        for (PendingCommand c : todo) safe(this, c);
     }
 
     /** Faz os botões "anterior/próxima" da notificação funcionarem com a fila gerida pelo app. */
@@ -255,8 +282,7 @@ public class MusicaPlaybackService extends MediaSessionService {
 
     void setQueue(List<MediaItem> items, boolean autoplay, long positionMs, boolean repeatOne) {
         if (items.isEmpty()) {
-            emitState("Arquivo de música não encontrado no armazenamento do app.");
-            return;
+            throw new IllegalArgumentException("Arquivo de música não encontrado no armazenamento do app.");
         }
         player.setRepeatMode(repeatOne ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
         player.setMediaItems(items, 0, Math.max(0L, positionMs));

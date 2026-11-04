@@ -36,6 +36,7 @@ function updateMiniPlayer() {
 
   $("nowTitle").textContent = song.name;
   $("nowArtist").textContent = song.artist;
+  $("nowInfo").setAttribute("aria-label", "Abrir player completo: " + song.name);
   setCover($("nowCover"), song.cover);
   $("nowLyrics").classList.toggle("has-lyrics", !!song.lyrics);
   $("nowLyrics").setAttribute("aria-label", song.lyrics ? "Mostrar letra disponível" : "Abrir e buscar a letra");
@@ -359,7 +360,12 @@ function callNativeMedia(method, payload) {
     nativeState.playing = payload.playbackState === "playing";
     if (nativeState.playing && !nativeAskedNotif) {
       nativeAskedNotif = true;
-      try { MN.requestNotifications(); } catch (e) { logErr("reproducao:362", e); }
+      try {
+        const request = MN.requestNotifications();
+        if (request && request.then) request.then(result => {
+          if (result && result.granted === false) showToast("Permita notificações para ver os controles de música na tela de bloqueio.");
+        }).catch(e => logErr("reproducao:362", e));
+      } catch (e) { logErr("reproducao:362", e); }
     }
   } else if (method === "setPositionState") {
     nativeState.duration = payload.duration;
@@ -702,4 +708,3 @@ function initMediaSessionHandlers() {
     }
   });
 }
-

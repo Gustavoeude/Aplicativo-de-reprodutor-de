@@ -215,7 +215,8 @@ $("themeBtn").onclick = () => {
   applyTheme();
 };
 
-systemTheme.addEventListener("change", () => {
+const onSystemThemeChange = () => {
   if (manualTheme === null) applyTheme();
-});
-
+};
+if (systemTheme.addEventListener) systemTheme.addEventListener("change", onSystemThemeChange);
+else if (systemTheme.addListener) systemTheme.addListener(onSystemThemeChange);

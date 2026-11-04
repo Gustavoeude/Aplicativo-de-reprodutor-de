@@ -53,6 +53,12 @@ self.addEventListener("fetch", event => {
   const scope = new URL(self.registration.scope);
   if (url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return;
 
+  const appPaths = new Set(CORE.map(path => new URL(path, self.registration.scope).pathname));
+  if (!appPaths.has(url.pathname)) {
+    event.respondWith(fetch(req));
+    return;
+  }
+
   event.respondWith((async () => {
     const fromCache = async () => {
       const hit = await caches.match(req, { ignoreSearch: true });

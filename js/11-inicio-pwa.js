@@ -22,7 +22,7 @@ async function loadSongs() {
         song.artist = inferred.artist;
         // Atualiza o título apenas quando ele ainda corresponde ao nome completo do arquivo.
         const savedTitle = String(song.name || "").trim();
-        const fileTitle = String(song.file.name || "").replace(/\\.[^/.]+$/, "").trim();
+        const fileTitle = String(song.file.name || "").replace(/\.[^/.]+$/, "").trim();
         if (!savedTitle || savedTitle === fileTitle) song.name = inferred.title;
         await dbPut(toRecord(song));
       }

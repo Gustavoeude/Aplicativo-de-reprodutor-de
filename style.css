@@ -830,6 +830,19 @@ body[data-page="library"] .topbar {
 .now-info {
   flex: 1;
   min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.now-info:focus-visible {
+  outline: 3px solid var(--md-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .now-info strong,
@@ -1548,9 +1561,11 @@ body[data-page="library"] .topbar {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *, *::before, *::after {
     animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
