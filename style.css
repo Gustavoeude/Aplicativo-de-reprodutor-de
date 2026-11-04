@@ -2349,3 +2349,32 @@ body.font-wide .home-eyebrow, body.font-wide .eyebrow { letter-spacing: 0; }
 .set-back svg { width: 22px; height: 22px; fill: currentColor; }
 .sheet h3.set-title { font-size: 26px; font-weight: 600; color: var(--md-on-surface); padding: 6px 18px 12px; }
 .set-head h3 { font-size: 22px; font-weight: 600; color: var(--md-on-surface); padding: 0; }
+
+/* ----- Ajustes como página inteira ----- */
+.settings-page {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--md-surface);
+  padding: calc(14px + env(safe-area-inset-top)) 0 calc(150px + env(safe-area-inset-bottom));
+  transform: translateX(100%);
+  visibility: hidden;
+  transition: transform .34s cubic-bezier(.22, 1, .36, 1), visibility 0s linear .34s;
+}
+.settings-page.open {
+  transform: none;
+  visibility: visible;
+  transition: transform .34s cubic-bezier(.22, 1, .36, 1), visibility 0s;
+}
+.settings-page:focus { outline: none; }
+.sp-top { padding: 0 16px; }
+.sp-title { font-size: 34px; font-weight: 700; margin: 10px 22px 18px; color: var(--md-on-surface); }
+.settings-page .cat-list { padding: 0 16px 10px; }
+.settings-page .set-sec { padding: 2px 20px 8px; }
+body.settings-open .now-playing { bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 30; }
+body.settings-open .bottom-nav { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .settings-page, .settings-page.open { transition: none; }
+}

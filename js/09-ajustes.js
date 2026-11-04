@@ -284,7 +284,6 @@ function pageDiagnostico() {
 }
 
 async function editProfileName() {
-  closeSheet();
   const n = await showDialog({
     title: "Seu nome",
     input: { value: settings.name, placeholder: "Como você quer ser chamado?" },
@@ -294,8 +293,8 @@ async function editProfileName() {
     settings.name = n;
     saveSettings();
     renderGreeting();
+    refreshSettingsPage();
   }
-  setTimeout(() => openSettings(), 300);
 }
 
 const SETTINGS_PAGES = {
@@ -307,13 +306,23 @@ const SETTINGS_PAGES = {
   diagnostico: { title: "Diagnóstico", build: pageDiagnostico }
 };
 
-function renderSettingsPage(sheet, go) {
-  sheet.replaceChildren(el("div", "sheet-handle"));
+let settingsEl = null;
+let settingsOpen = false;
+
+function renderSettingsPage(box, go) {
+  box.replaceChildren();
   const page = SETTINGS_PAGES[settingsPage];
+  if (!page) settingsPage = null;
+
+  const top = el("div", "sp-top");
+  const back = el("button", "set-back");
+  back.setAttribute("aria-label", "Voltar");
+  back.appendChild(el("span", "material-symbols-rounded", "arrow_back"));
+  back.onclick = () => (page ? go(null) : closeSettings());
+  top.appendChild(back);
+  box.append(top, el("h2", "sp-title", page ? page.title : "Ajustes"));
 
   if (!page) {
-    settingsPage = null;
-    sheet.appendChild(el("h3", "set-title", "Ajustes"));
     const list = el("div", "cat-list");
     list.append(
       catRow("person", 215, "Perfil", settings.name ? settings.name : "Seu nome e saudação", editProfileName),
@@ -326,38 +335,85 @@ function renderSettingsPage(sheet, go) {
       catRow("lyrics", 175, "Privacidade", "Buscas online de letras e capas", () => go("privacidade")),
       catRow("bug_report", 120, "Diagnóstico", "Registro de erros", () => go("diagnostico"))
     );
-    sheet.appendChild(list);
+    box.appendChild(list);
     return;
   }
 
-  const head = el("div", "set-head");
-  const back = el("button", "set-back");
-  back.setAttribute("aria-label", "Voltar");
-  back.appendChild(el("span", "material-symbols-rounded", "arrow_back"));
-  back.onclick = () => go(null);
-  head.append(back, el("h3", "", page.title));
-  sheet.appendChild(head);
-  page.build(go).forEach(n => sheet.appendChild(n));
+  page.build(go).forEach(n => box.appendChild(n));
+}
+
+// navegar dentro dos Ajustes; fromPop = veio do botão voltar do Android
+function settingsGo(p, fromPop) {
+  if (!settingsEl) return;
+  if (!fromPop) {
+    try {
+      if (p && settingsPage === null) history.pushState({ settings: 2 }, "");
+      else if (!p && settingsPage !== null) {
+        if (history.state && history.state.settings === 2) { history.back(); return; }
+      }
+    } catch (e) { logErr("ajustes:nav", e); }
+  }
+  settingsPage = p;
+  renderSettingsPage(settingsEl, settingsGo);
+  settingsEl.scrollTop = 0;
+}
+
+function refreshSettingsPage() {
+  if (settingsOpen && settingsEl) renderSettingsPage(settingsEl, settingsGo);
 }
 
 function openSettings(page) {
-  settingsPage = typeof page === "string" ? page : null;
-  const returnFocus = activeSheet ? activeSheet.returnFocus : document.activeElement;
   closeSheet();
+  if (!settingsEl) {
+    settingsEl = el("div", "settings-page");
+    settingsEl.id = "settingsPage";
+    settingsEl.setAttribute("role", "dialog");
+    settingsEl.setAttribute("aria-modal", "true");
+    settingsEl.setAttribute("aria-label", "Ajustes");
+    settingsEl.setAttribute("tabindex", "-1");
+    document.body.appendChild(settingsEl);
+  }
+  settingsPage = typeof page === "string" ? page : null;
+  renderSettingsPage(settingsEl, settingsGo);
+  settingsEl.scrollTop = 0;
 
-  const scrim = el("div", "scrim");
-  const sheet = el("div", "sheet");
-  const go = p => {
-    settingsPage = p;
-    renderSettingsPage(sheet, go);
-    sheet.scrollTop = 0;
-  };
-  renderSettingsPage(sheet, go);
-
-  scrim.onclick = closeSheet;
-  presentSheet(scrim, sheet, returnFocus);
+  if (!settingsOpen) {
+    try {
+      history.pushState({ settings: 1 }, "");
+      if (settingsPage) history.pushState({ settings: 2 }, "");
+    } catch (e) { logErr("ajustes:abrir", e); }
+  }
+  settingsOpen = true;
+  document.body.classList.add("settings-open", "no-scroll");
+  settingsEl.classList.add("open");
+  settingsEl.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => settingsEl.focus());
 }
 
+function closeSettings(fromPop) {
+  if (!settingsOpen) return;
+  settingsOpen = false;
+  settingsPage = null;
+  settingsEl.classList.remove("open");
+  settingsEl.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("settings-open");
+  if (!fpOpen) document.body.classList.remove("no-scroll");
+  if (!fromPop) {
+    try {
+      const n = history.state && history.state.settings;
+      if (n) history.go(-n);
+    } catch (e) { logErr("ajustes:fechar", e); }
+  }
+  const g = $("homeSettings");
+  if (g) g.focus();
+}
+
+window.addEventListener("popstate", () => {
+  if (!settingsOpen || fpOpen) return;
+  const st = history.state && history.state.settings;
+  if (!st) closeSettings(true);
+  else if (st === 1 && settingsPage !== null) settingsGo(null, true);
+});
 
 /* ==========================================================
    Formas das bolinhas (segure para personalizar)
@@ -473,7 +529,7 @@ function openShapePicker(id, backToSettings) {
       saveSettings();
       applyShapes();
       closeSheet();
-      if (backToSettings) setTimeout(() => openSettings("aparencia"), 300);
+      if (backToSettings) setTimeout(refreshSettingsPage, 300);
     };
 
     grid.appendChild(b);

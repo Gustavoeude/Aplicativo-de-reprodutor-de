@@ -130,6 +130,7 @@ async function importFontFile(file) {
   settings.font = id;
   saveSettings();
   applyFont();
+  refreshSettingsPage();
   showToast("Fonte “" + rec.name + "” adicionada");
 }
 
