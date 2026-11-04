@@ -2098,16 +2098,17 @@ body.disc .fp-cover::after {
 :root {
   --spring: cubic-bezier(.34, 1.45, .64, 1);
   --spring-soft: cubic-bezier(.22, 1.12, .36, 1);
+  --soft: cubic-bezier(.2, 0, 0, 1); /* desacelera sem quicar */
 }
 
 main { overflow-x: clip; }
 
 /* ----- transição entre páginas ----- */
-.page.enter-from-right { animation: pageInR .42s cubic-bezier(.22, 1, .36, 1) backwards; }
-.page.enter-from-left  { animation: pageInL .42s cubic-bezier(.22, 1, .36, 1) backwards; }
+.page.enter-from-right { animation: pageInR .4s var(--soft) backwards; }
+.page.enter-from-left  { animation: pageInL .4s var(--soft) backwards; }
 
-@keyframes pageInR { from { transform: translateX(100%); } }
-@keyframes pageInL { from { transform: translateX(-100%); } }
+@keyframes pageInR { from { transform: translateX(32%); opacity: 0; } }
+@keyframes pageInL { from { transform: translateX(-32%); opacity: 0; } }
 
 .page.leaving {
   display: block !important;
@@ -2118,20 +2119,20 @@ main { overflow-x: clip; }
   pointer-events: none;
   z-index: 0;
 }
-.page.leave-left  { animation: pageOutL .42s cubic-bezier(.22, 1, .36, 1) forwards; }
-.page.leave-right { animation: pageOutR .42s cubic-bezier(.22, 1, .36, 1) forwards; }
+.page.leave-left  { animation: pageOutL .3s var(--soft) forwards; }
+.page.leave-right { animation: pageOutR .3s var(--soft) forwards; }
 
-@keyframes pageOutL { to { transform: translateX(-100%); } }
-@keyframes pageOutR { to { transform: translateX(100%); } }
+@keyframes pageOutL { to { transform: translateX(-18%); opacity: 0; } }
+@keyframes pageOutR { to { transform: translateX(18%); opacity: 0; } }
 
 .page.dragging { animation: none !important; will-change: transform, opacity; }
 
 /* ----- entrada em cascata ----- */
 @keyframes riseIn {
-  from { opacity: 0; translate: 0 14px; scale: .97; }
+  from { opacity: 0; translate: 0 8px; }
 }
 @keyframes popIn {
-  from { opacity: 0; scale: .4; rotate: -14deg; }
+  from { opacity: 0; scale: .85; }
 }
 
 .stagger .home-top,
@@ -2143,42 +2144,25 @@ main { overflow-x: clip; }
 .stagger .home-stats,
 .stagger .home-section,
 .stagger .library-add-button,
-.stagger .empty-state { animation: riseIn .4s var(--spring-soft) backwards; }
+.stagger .empty-state { animation: riseIn .3s var(--soft) backwards; }
 
-.stagger .home-top { animation-delay: 0s; }
-.stagger .hero-copy, .stagger .page-heading { animation-delay: .02s; }
-.stagger .search-box, .stagger .filters { animation-delay: .04s; }
-.stagger .home-stats { animation-delay: .08s; }
-.stagger .home-section { animation-delay: .12s; }
-.stagger .hero-play { animation: popIn .7s var(--spring) .1s backwards; }
+.stagger .hero-play { animation: popIn .4s var(--soft) backwards; }
 
 .stagger .song-item,
 .stagger .h-card,
-.stagger .stat { animation: riseIn .4s var(--spring-soft) backwards; }
+.stagger .stat { animation: riseIn .3s var(--soft) backwards; }
 
-.stagger .song-item:nth-child(1), .stagger .h-card:nth-child(1), .stagger .stat:nth-child(1) { animation-delay: 0.048s; }
-.stagger .song-item:nth-child(2), .stagger .h-card:nth-child(2), .stagger .stat:nth-child(2) { animation-delay: 0.076s; }
-.stagger .song-item:nth-child(3), .stagger .h-card:nth-child(3), .stagger .stat:nth-child(3) { animation-delay: 0.104s; }
-.stagger .song-item:nth-child(4), .stagger .h-card:nth-child(4), .stagger .stat:nth-child(4) { animation-delay: 0.132s; }
-.stagger .song-item:nth-child(5), .stagger .h-card:nth-child(5), .stagger .stat:nth-child(5) { animation-delay: 0.160s; }
-.stagger .song-item:nth-child(6), .stagger .h-card:nth-child(6), .stagger .stat:nth-child(6) { animation-delay: 0.188s; }
-.stagger .song-item:nth-child(7), .stagger .h-card:nth-child(7), .stagger .stat:nth-child(7) { animation-delay: 0.216s; }
-.stagger .song-item:nth-child(8), .stagger .h-card:nth-child(8), .stagger .stat:nth-child(8) { animation-delay: 0.244s; }
-.stagger .song-item:nth-child(9), .stagger .h-card:nth-child(9), .stagger .stat:nth-child(9) { animation-delay: 0.272s; }
-.stagger .song-item:nth-child(10), .stagger .h-card:nth-child(10), .stagger .stat:nth-child(10) { animation-delay: 0.300s; }
-.stagger .song-item:nth-child(11), .stagger .h-card:nth-child(11), .stagger .stat:nth-child(11) { animation-delay: 0.328s; }
-.stagger .song-item:nth-child(12), .stagger .h-card:nth-child(12), .stagger .stat:nth-child(12) { animation-delay: 0.356s; }
 
 /* ----- player completo abrindo com mola ----- */
-.full-player { transition: transform .5s var(--spring-soft), visibility 0s linear .5s; }
-.full-player.open { transition: transform .5s var(--spring-soft), visibility 0s; }
+.full-player { opacity: 0; transition: transform .5s var(--soft), opacity .35s ease, visibility 0s linear .5s; }
+.full-player.open { opacity: 1; transition: transform .5s var(--soft), opacity .3s ease, visibility 0s; }
 
 .full-player .fp-meta,
 .full-player .fp-viz,
 .full-player .fp-progress,
 .full-player .fp-controls {
   opacity: 0;
-  translate: 0 30px;
+  translate: 0 16px;
   transition: opacity .2s ease, translate .25s var(--ease);
 }
 .full-player.open .fp-meta,
@@ -2187,12 +2171,12 @@ main { overflow-x: clip; }
 .full-player.open .fp-controls {
   opacity: 1;
   translate: 0 0;
-  transition: opacity .4s ease, translate .65s var(--spring-soft);
+  transition: opacity .35s ease, translate .45s var(--soft);
 }
-.full-player.open .fp-meta     { transition-delay: .10s; }
-.full-player.open .fp-viz      { transition-delay: .15s; }
-.full-player.open .fp-progress { transition-delay: .19s; }
-.full-player.open .fp-controls { transition-delay: .24s; }
+.full-player.open .fp-meta     { transition-delay: .06s; }
+.full-player.open .fp-viz      { transition-delay: .08s; }
+.full-player.open .fp-progress { transition-delay: .10s; }
+.full-player.open .fp-controls { transition-delay: .12s; }
 
 /* ----- barra de progresso ondulada ----- */
 .seek-wrap { position: relative; height: 36px; }
