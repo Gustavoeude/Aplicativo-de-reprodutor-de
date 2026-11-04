@@ -155,6 +155,51 @@ public class MusicaPlugin extends Plugin {
                 || lower.endsWith(".3gp") || lower.endsWith(".lrc");
     }
 
+    /** Lê um arquivo SAF em blocos para evitar uma única string Base64 gigante na ponte JS. */
+    @PluginMethod
+    public void readFolderFileChunk(PluginCall call) {
+        try {
+            String value = call.getString("uri");
+            if (value == null || value.isEmpty()) throw new IllegalArgumentException("Arquivo inválido");
+            Uri uri = Uri.parse(value);
+            long offset = Math.max(0L, (long) (double) call.getDouble("offset", 0.0));
+            int chunkSize = call.getInt("chunkSize", 512 * 1024);
+            chunkSize = Math.max(64 * 1024, Math.min(chunkSize, 1024 * 1024));
+
+            byte[] buffer = new byte[chunkSize + 1];
+            int total = 0;
+            try (java.io.InputStream input = getContext().getContentResolver().openInputStream(uri)) {
+                if (input == null) throw new java.io.IOException("Arquivo indisponível");
+                long skipped = 0;
+                while (skipped < offset) {
+                    long step = input.skip(offset - skipped);
+                    if (step > 0) {
+                        skipped += step;
+                    } else {
+                        if (input.read() == -1) throw new java.io.IOException("Fim inesperado do arquivo");
+                        skipped++;
+                    }
+                }
+                while (total < buffer.length) {
+                    int count = input.read(buffer, total, buffer.length - total);
+                    if (count == -1) break;
+                    if (count > 0) total += count;
+                }
+            }
+
+            int bytesToSend = Math.min(total, chunkSize);
+            byte[] chunk = java.util.Arrays.copyOf(buffer, bytesToSend);
+            JSObject response = new JSObject();
+            response.put("base64", Base64.encodeToString(chunk, Base64.NO_WRAP));
+            response.put("nextOffset", offset + bytesToSend);
+            response.put("done", total <= chunkSize);
+            response.put("bytesRead", bytesToSend);
+            call.resolve(response);
+        } catch (Exception e) {
+            call.reject("Não foi possível ler o bloco do arquivo: " + e.getMessage());
+        }
+    }
+
     @PluginMethod
     public void readFolderFile(PluginCall call) {
         try {
