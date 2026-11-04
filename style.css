@@ -60,6 +60,50 @@ body.no-scroll {
   overflow: hidden;
 }
 
+/* Papel de parede opcional: fica atrás da interface, sem alterar a navegação */
+body::after {
+  content: "";
+  position: fixed;
+  inset: -16px;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--custom-wallpaper, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  filter: blur(var(--wallpaper-blur, 0px));
+  transform: scale(1.025);
+  transition: opacity .25s ease, filter .25s ease;
+}
+body.has-wallpaper::after {
+  opacity: var(--wallpaper-opacity, .28);
+}
+.wallpaper-preview {
+  min-height: 116px;
+  margin: 8px 0 12px;
+  border-radius: 20px;
+  background-size: cover;
+  background-position: center;
+  box-shadow: inset 0 0 0 1000px rgba(0,0,0,.16);
+}
+.wallpaper-range-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(112px,42%);
+  gap: 12px;
+}
+.wallpaper-range {
+  width: 100%;
+  accent-color: var(--md-primary);
+}
+.wallpaper-value {
+  display: block;
+  margin-top: 3px;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+}
+
+
 /* brilho colorido no topo (puxa a cor da capa) */
 body::before {
   content: "";
@@ -2402,3 +2446,37 @@ body.settings-open .bottom-nav { visibility: hidden; }
   background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
 }
 .lrc-adjust-val { font-size: 12.5px; color: var(--md-on-surface-variant); min-width: 52px; text-align: center; }
+
+
+/* Correção do layout dos controles de papel de parede em telas estreitas */
+.settings-page .set-row.wallpaper-range-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(132px, 42%);
+  align-items: center;
+  column-gap: 14px;
+  width: 100%;
+}
+.settings-page .wallpaper-range-row .set-row-text {
+  min-width: 0;
+  width: auto;
+  flex: initial;
+}
+.settings-page .wallpaper-range-row .set-row-text strong,
+.settings-page .wallpaper-range-row .set-row-text span {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.settings-page .wallpaper-range-row .wallpaper-range {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  flex: initial;
+}
+@media (max-width: 380px) {
+  .settings-page .set-row.wallpaper-range-row {
+    grid-template-columns: minmax(0, 1fr) minmax(112px, 40%);
+    column-gap: 10px;
+  }
+}
