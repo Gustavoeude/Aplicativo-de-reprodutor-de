@@ -6,10 +6,11 @@
 const pageIds = {
   home: "homePage",
   search: "searchPage",
-  library: "libraryPage"
+  library: "libraryPage",
+  more: "morePage"
 };
 
-const pageOrder = ["home", "search", "library"];
+const pageOrder = ["home", "search", "library", "more"];
 let pageTimer = null;
 
 function cleanupLeaving() {
@@ -62,11 +63,72 @@ function openPage(name, opts) {
 
   if (name === "search") renderSearch();
   if (name === "library") renderLibrary();
+  if (name === "more") renderMore();
 }
 
 document.querySelectorAll(".nav-item").forEach(b => {
   b.addEventListener("click", () => openPage(b.dataset.target));
 });
+
+
+/* ==========================================================
+   Página Mais — atalhos para recursos já existentes
+   ========================================================== */
+function renderMore() {
+  const root = $("moreContent");
+  if (!root) return;
+  root.replaceChildren();
+
+  const items = [
+    { icon: "palette", title: "Personalização", desc: "Temas, cores, fontes e papel de parede", run: () => openSettings("aparencia") },
+    { icon: "library_music", title: "Biblioteca e importação", desc: "Importar músicas e pastas", run: () => openSettings("biblioteca") },
+    { icon: "settings", title: "Configurações", desc: "Ajustes gerais e comportamento", run: () => openSettings() },
+    { icon: "music_note", title: "Reprodução", desc: "Opções do player e segundo plano", run: () => openSettings("reproducao") },
+    { icon: "bug_report", title: "Diagnóstico", desc: "Consultar o registro de erros", run: () => openSettings("diagnostico") }
+  ];
+
+  const list = el("div", "more-list");
+  items.forEach(item => {
+    const button = el("button", "more-row");
+    const icon = el("span", "more-row-icon material-symbols-rounded", item.icon);
+    const copy = el("span", "more-row-copy");
+    copy.append(el("strong", "", item.title), el("small", "", item.desc));
+    button.append(icon, copy, el("span", "more-row-arrow material-symbols-rounded", "chevron_right"));
+    button.addEventListener("click", item.run);
+    list.appendChild(button);
+  });
+  root.appendChild(list);
+
+  const history = el("section", "more-history");
+  history.appendChild(el("h2", "page-section-title", "Tocadas recentemente"));
+  const recent = [...new Set((playHistory || []).slice(-12).reverse())]
+    .map(id => getSong(id)).filter(Boolean).slice(0, 6);
+
+  if (!recent.length) {
+    history.appendChild(el("p", "more-empty", "As músicas que você reproduzir aparecerão aqui."));
+  } else {
+    const songsBox = el("div", "more-history-list");
+    recent.forEach(song => {
+      const row = el("button", "more-history-row");
+      const cover = el("span", "more-history-cover");
+      setCover(cover, song.cover);
+      const copy = el("span", "more-row-copy");
+      copy.append(el("strong", "", song.name), el("small", "", song.artist));
+      row.append(cover, copy, el("span", "material-symbols-rounded", "play_arrow"));
+      row.addEventListener("click", () => playSong(song.id, allIds()));
+      songsBox.appendChild(row);
+    });
+    history.appendChild(songsBox);
+  }
+  root.appendChild(history);
+
+  const upcoming = el("div", "more-upcoming");
+  upcoming.append(
+    el("span", "material-symbols-rounded", "graphic_eq"),
+    el("span", "", "Equalizador e temporizador: recursos planejados para uma próxima etapa.")
+  );
+  root.appendChild(upcoming);
+}
 
 /* ==========================================================
    Deslizar entre as páginas (Your Mix ⇄ Search ⇄ Library)
