@@ -474,7 +474,7 @@ async function nativeItem(song) {
   return { id: String(song.id), path: info.path, title: song.name || "Música", artist: song.artist || "", cover };
 }
 
-async function nativeStart(song, autoplay) {
+async function nativeStart(song, autoplay, startAt) {
   const token = ++nativeToken;
   lsSet("nativeFail", (lsGet("nativeFail", 0) || 0) + 1);
   audio.beginLoad(song.id, autoplay);
@@ -485,7 +485,7 @@ async function nativeStart(song, autoplay) {
     await MN.setQueue({
       items: [item],
       autoplay,
-      position: 0,
+      position: Math.max(0, Math.round((startAt || 0) * 1000)),
       repeatOne: repeat === "one" || (repeat === "all" && queue.length === 1)
     });
     nativeRefreshUpcoming();

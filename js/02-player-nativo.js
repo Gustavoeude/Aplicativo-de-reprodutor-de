@@ -82,6 +82,16 @@ class NativeAudio {
   }
   play() {
     if (this.loadedId !== null) {
+      // o player nativo foi esvaziado (botão X da notificação): carrega a música de novo
+      if (this.needsReload) {
+        const song = songs.find(s => String(s.id) === String(this.loadedId));
+        if (song) {
+          const at = this._pos || 0;
+          this.needsReload = false;
+          nativeStart(song, true, at);
+          return Promise.resolve();
+        }
+      }
       this.setPlaying(true);
       try { MN.play(); } catch (e) { logErr("player-nativo:86", e); }
     }
@@ -106,6 +116,8 @@ class NativeAudio {
   }
   beginLoad(id, autoplay) {
     this.loadedId = id;
+    this.needsReload = false;
+    this._seenReady = false;
     this._ended = false;
     this._gotDuration = false;
     this.error = null;
@@ -132,6 +144,10 @@ class NativeAudio {
     if (this.loadedId === null || String(this.loadedId) !== String(st.id)) return;
     const wasPaused = this.paused;
     if (st.state === 3 || st.playing) lsSet("nativeFail", 0); // tocou de verdade: zera a proteção
+
+    if (st.state === 3) this._seenReady = true;
+    if (st.state === 2 || st.state === 3) this.needsReload = false;
+    else if (st.state === 1 && this._seenReady) this.needsReload = true; // player esvaziado
 
     const dur = st.duration > 0 ? st.duration / 1000 : NaN;
     if (!(isNaN(dur) && isNaN(this.duration)) && dur !== this.duration) {
