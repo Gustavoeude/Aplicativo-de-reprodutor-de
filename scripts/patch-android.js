@@ -19,6 +19,24 @@ for (const f of fs.readdirSync(srcDir).filter(n => n.endsWith(".java"))) {
   console.log("copiado", f);
 }
 
+/* Registra o plugin local antes da inicialização da Bridge do Capacitor. */
+const activityPath = path.join(javaDir, "MainActivity.java");
+if (!fs.existsSync(activityPath)) {
+  throw new Error("MainActivity.java não encontrada em " + activityPath);
+}
+let activity = fs.readFileSync(activityPath, "utf8");
+if (!activity.includes("registerPlugin(MusicaPlugin.class)")) {
+  const onCreate = /(public\\s+void\\s+onCreate\\s*\\(\\s*Bundle\\s+\\w+\\s*\\)\\s*\\{)/;
+  if (!onCreate.test(activity)) {
+    throw new Error("Não foi possível localizar onCreate(Bundle) em MainActivity.java");
+  }
+  activity = activity.replace(onCreate, "$1\\n        registerPlugin(MusicaPlugin.class);");
+  fs.writeFileSync(activityPath, activity);
+  console.log("plugin MusicaPlugin registrado na MainActivity");
+} else {
+  console.log("plugin MusicaPlugin já estava registrado");
+}
+
 let xml = fs.readFileSync(manifestPath, "utf8");
 const missingPermissions = [
   "android.permission.INTERNET",
