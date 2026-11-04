@@ -317,7 +317,7 @@ let homeMain = null;
 let lrcTargetId = null;
 let seed = { h: 215, s: 0.8 };
 let settings = Object.assign(
-  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false, font: "roboto", autoLyrics: true, autoCovers: true },
+  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false, font: "roboto", autoLyrics: true, autoCovers: true, wallpaper: null, wallpaperOpacity: 0.28, wallpaperBlur: 0 },
   lsGet("settings", {})
 );
 if (!settings.shapes || typeof settings.shapes !== "object") settings.shapes = {};
@@ -2809,9 +2809,64 @@ const ACCENTS = [
   { id: 175, name: "Turquesa" }
 ];
 
+function applyWallpaper() {
+  const image = typeof settings.wallpaper === "string" ? settings.wallpaper : "";
+  document.body.classList.toggle("has-wallpaper", !!image);
+  document.body.style.setProperty("--custom-wallpaper", image ? 'url("' + image + '")' : "none");
+  const opacity = Math.min(0.55, Math.max(0.08, Number(settings.wallpaperOpacity ?? 0.28)));
+  const blur = Math.min(18, Math.max(0, Number(settings.wallpaperBlur ?? 0)));
+  document.body.style.setProperty("--wallpaper-opacity", String(opacity));
+  document.body.style.setProperty("--wallpaper-blur", blur + "px");
+}
+
+function importWallpaperFile(file) {
+  if (!file) return;
+  if (!file.type || !file.type.startsWith("image/")) {
+    showToast("Escolha um arquivo de imagem.");
+    return;
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    showToast("A imagem é muito grande. Escolha uma imagem de até 20 MB.");
+    return;
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  const image = new Image();
+  image.onload = () => {
+    try {
+      const maxSide = 1440;
+      const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Não foi possível processar a imagem.");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      let dataUrl = canvas.toDataURL("image/jpeg", 0.72);
+      if (dataUrl.length > 1800000) dataUrl = canvas.toDataURL("image/jpeg", 0.58);
+      if (dataUrl.length > 2200000) throw new Error("A imagem ainda ficou grande demais. Escolha outra imagem.");
+      settings.wallpaper = dataUrl;
+      saveSettings();
+      applyWallpaper();
+      showToast("Papel de parede aplicado.");
+      openSettings();
+    } catch (error) {
+      showToast(error && error.message ? error.message : "Não foi possível aplicar essa imagem.");
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    showToast("Não foi possível abrir essa imagem.");
+  };
+  image.src = objectUrl;
+}
+
 function applySettings() {
   document.body.classList.toggle("amoled", !!settings.amoled);
   document.body.classList.toggle("disc", !!settings.disc);
+  applyWallpaper();
   applyShapes();
   applyFont();
   renderGreeting();
@@ -2844,6 +2899,82 @@ function openSettings() {
   const sheet = el("div", "sheet");
   sheet.appendChild(el("div", "sheet-handle"));
   sheet.appendChild(el("h3", "", "Ajustes"));
+
+  const wallpaperSec = el("div", "set-sec");
+  wallpaperSec.appendChild(el("div", "set-label", "Papel de parede"));
+
+  const chooseWallpaper = el("button", "set-row");
+  const chooseWallpaperText = el("div", "set-row-text");
+  chooseWallpaperText.append(
+    el("strong", "", "Escolher da galeria"),
+    el("span", "", "Use qualquer imagem do seu celular como fundo")
+  );
+  chooseWallpaper.append(chooseWallpaperText, el("span", "material-symbols-rounded", "image"));
+  chooseWallpaper.onclick = () => $("wallpaperInput").click();
+  wallpaperSec.appendChild(chooseWallpaper);
+
+  if (settings.wallpaper) {
+    const preview = el("div", "wallpaper-preview");
+    preview.style.backgroundImage = 'url("' + settings.wallpaper + '")';
+    preview.appendChild(el("span", "", "Papel de parede atual"));
+    wallpaperSec.appendChild(preview);
+
+    const removeWallpaper = el("button", "set-row");
+    const removeText = el("div", "set-row-text");
+    removeText.append(
+      el("strong", "", "Remover papel de parede"),
+      el("span", "", "Voltar ao fundo original do aplicativo")
+    );
+    removeWallpaper.append(removeText, el("span", "material-symbols-rounded", "delete"));
+    removeWallpaper.onclick = () => {
+      settings.wallpaper = null;
+      saveSettings();
+      applyWallpaper();
+      openSettings();
+      showToast("Papel de parede removido.");
+    };
+    wallpaperSec.appendChild(removeWallpaper);
+  }
+
+  const wallpaperOpacityRow = el("div", "set-row wallpaper-range-row");
+  const wallpaperOpacityText = el("div", "set-row-text");
+  wallpaperOpacityText.append(
+    el("strong", "", "Intensidade"),
+    el("span", "", "Ajuste quanto da imagem aparece no fundo")
+  );
+  const wallpaperOpacity = el("input", "wallpaper-range");
+  wallpaperOpacity.type = "range";
+  wallpaperOpacity.min = "8";
+  wallpaperOpacity.max = "55";
+  wallpaperOpacity.value = String(Math.round(Number(settings.wallpaperOpacity ?? 0.28) * 100));
+  wallpaperOpacity.setAttribute("aria-label", "Intensidade do papel de parede");
+  wallpaperOpacity.oninput = () => {
+    settings.wallpaperOpacity = Number(wallpaperOpacity.value) / 100;
+    applyWallpaper();
+  };
+  wallpaperOpacity.onchange = saveSettings;
+  wallpaperOpacityRow.append(wallpaperOpacityText, wallpaperOpacity);
+  wallpaperSec.appendChild(wallpaperOpacityRow);
+
+  const wallpaperBlurRow = el("div", "set-row wallpaper-range-row");
+  const wallpaperBlurText = el("div", "set-row-text");
+  wallpaperBlurText.append(
+    el("strong", "", "Desfoque"),
+    el("span", "", "Deixe a imagem mais suave")
+  );
+  const wallpaperBlur = el("input", "wallpaper-range");
+  wallpaperBlur.type = "range";
+  wallpaperBlur.min = "0";
+  wallpaperBlur.max = "18";
+  wallpaperBlur.value = String(Number(settings.wallpaperBlur ?? 0));
+  wallpaperBlur.setAttribute("aria-label", "Desfoque do papel de parede");
+  wallpaperBlur.oninput = () => {
+    settings.wallpaperBlur = Number(wallpaperBlur.value);
+    applyWallpaper();
+  };
+  wallpaperBlur.onchange = saveSettings;
+  wallpaperBlurRow.append(wallpaperBlurText, wallpaperBlur);
+  wallpaperSec.appendChild(wallpaperBlurRow);
 
   const sec = el("div", "set-sec");
   sec.appendChild(el("div", "set-label", "Cor do app"));
@@ -3040,6 +3171,7 @@ function openSettings() {
     closeSheet();
   };
   shapeSec.appendChild(resetRow);
+  sheet.appendChild(wallpaperSec);
   sheet.appendChild(sec);
   sheet.appendChild(fontSec);
   sheet.appendChild(shapeSec);
@@ -3369,6 +3501,12 @@ $("fontInput").addEventListener("change", () => {
   const file = $("fontInput").files && $("fontInput").files[0];
   importFontFile(file);
   $("fontInput").value = "";
+});
+
+$("wallpaperInput").addEventListener("change", () => {
+  const file = $("wallpaperInput").files && $("wallpaperInput").files[0];
+  importWallpaperFile(file);
+  $("wallpaperInput").value = "";
 });
 
 $("homeSettings").onclick = openSettings;
