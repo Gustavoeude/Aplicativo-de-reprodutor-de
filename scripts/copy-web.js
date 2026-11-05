@@ -16,6 +16,7 @@ const files = [
   "js/08-progresso-player-completo.js",
   "js/09-ajustes.js",
   "js/10-fontes-letras.js",
+  "js/pasta-monitorada.js",
   "js/11-inicio-pwa.js",
   "style.css",
   "jsmediatags.min.js",
