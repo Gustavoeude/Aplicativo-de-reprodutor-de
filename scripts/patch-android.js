@@ -78,7 +78,7 @@ if (missingPermissions.length || services.length) {
 }
 /* ----- nome, ícone e versão do app ----- */
 const res = path.join(root, "android/app/src/main/res");
-const APP_NAME = "Música";
+const APP_NAME = "Nyx";
 
 // nome
 const stringsPath = path.join(res, "values/strings.xml");
