@@ -3,63 +3,68 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Política de Privacidade do aplicativo Música, desenvolvido por Gustavoeude.">
+  <meta name="description" content="Conheça o Música, um reprodutor de música para Android com biblioteca, playlists e reprodução em segundo plano.">
   <meta name="theme-color" content="#17131d">
-  <title>Política de Privacidade — Música</title>
+  <title>Música — Seu reprodutor</title>
   <style>
-    :root { color-scheme: dark; --bg:#17131d; --surface:#241e2b; --text:#f4edf7; --muted:#c8bacd; --accent:#e9a8d2; }
+    :root { color-scheme: dark; --bg:#120f18; --surface:#211b29; --surface2:#2b2334; --text:#f8f1fa; --muted:#c9bdcf; --accent:#f0a9d6; --line:#49384f; }
     * { box-sizing:border-box; }
-    body { margin:0; padding:32px 16px; background:var(--bg); color:var(--text); font:16px/1.7 system-ui,-apple-system,"Segoe UI",sans-serif; }
-    main { max-width:760px; margin:0 auto; padding:clamp(22px,5vw,42px); background:var(--surface); border:1px solid #44364d; border-radius:24px; }
-    h1,h2 { line-height:1.25; }
-    h1 { font-size:clamp(1.8rem,5vw,2.5rem); margin:0 0 8px; }
-    h2 { margin-top:30px; font-size:1.2rem; color:var(--accent); }
-    p,li { color:var(--muted); }
-    a { color:var(--accent); overflow-wrap:anywhere; }
-    .date { margin-top:0; font-size:.92rem; }
-    footer { max-width:760px; margin:18px auto 0; text-align:center; color:var(--muted); font-size:.85rem; }
+    body { margin:0; min-height:100vh; padding:28px 16px; background:radial-gradient(ellipse at 50% -15%,#49304b 0,transparent 55%),var(--bg); color:var(--text); font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { width:min(100%,820px); margin:0 auto; }
+    header { display:flex; align-items:center; gap:12px; margin:8px 0 48px; }
+    .logo { display:grid; place-items:center; width:46px; height:46px; border-radius:16px; background:var(--surface2); border:1px solid var(--line); color:var(--accent); font-size:24px; }
+    .brand { font-weight:750; letter-spacing:.02em; font-size:1.12rem; }
+    .hero { padding:clamp(26px,6vw,58px); border:1px solid var(--line); border-radius:30px; background:linear-gradient(145deg,rgba(55,40,63,.96),rgba(29,24,36,.98)); box-shadow:0 22px 70px #0005; }
+    .eyebrow { color:var(--accent); font-size:.78rem; font-weight:750; letter-spacing:.14em; text-transform:uppercase; }
+    h1 { margin:10px 0 12px; font-size:clamp(2.5rem,9vw,4.6rem); line-height:1.05; letter-spacing:-.055em; }
+    .intro { max-width:590px; color:var(--muted); font-size:1.08rem; }
+    .actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:28px; }
+    .button { display:inline-flex; align-items:center; justify-content:center; min-height:48px; padding:11px 19px; border-radius:999px; font-weight:750; text-decoration:none; border:1px solid var(--line); }
+    .primary { background:var(--accent); color:#281727; border-color:var(--accent); }
+    .secondary { color:var(--text); background:#ffffff08; }
+    .version { margin-top:14px; color:var(--muted); font-size:.88rem; }
+    section { margin-top:28px; padding:26px; border:1px solid var(--line); border-radius:24px; background:var(--surface); }
+    h2 { margin:0 0 16px; font-size:1.25rem; }
+    .features { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+    .feature { padding:15px; border-radius:16px; background:var(--surface2); color:var(--muted); }
+    .feature strong { display:block; margin-bottom:4px; color:var(--text); }
+    footer { padding:28px 8px 10px; text-align:center; color:var(--muted); font-size:.9rem; }
+    footer a { color:var(--accent); }
+    a:focus-visible { outline:3px solid white; outline-offset:4px; }
   </style>
 </head>
 <body>
   <main>
-    <h1>Política de Privacidade</h1>
-    <p class="date">Aplicativo Música · Última atualização: 4 de novembro de 2026</p>
-    <p>O Música é um reprodutor de áudio para Android desenvolvido por Gustavoeude. Esta página explica, de forma resumida, como as informações são utilizadas pelas funcionalidades atualmente identificadas no aplicativo.</p>
-
-    <h2>1. Informações armazenadas no dispositivo</h2>
-    <p>O aplicativo utiliza armazenamento local para manter dados necessários ao seu funcionamento, que podem incluir músicas importadas e seus metadados, playlists, favoritos, preferências, configurações e informações de reprodução.</p>
-
-    <h2>2. Serviços de terceiros</h2>
-    <p>Algumas funções podem se comunicar com serviços externos:</p>
-    <ul>
-      <li><strong>LRCLIB:</strong> para procurar letras, o aplicativo pode enviar o título da música e informações como artista e álbum.</li>
-      <li><strong>Apple/iTunes Search:</strong> para procurar capas, o aplicativo consulta o serviço de busca de músicas e pode receber URLs de imagens.</li>
-      <li><strong>Google Fonts:</strong> pode fornecer fontes utilizadas na interface.</li>
-    </ul>
-    <p>Ao utilizar esses serviços, informações técnicas da conexão podem ser processadas pelos respectivos provedores, de acordo com suas próprias políticas e condições.</p>
-
-    <h2>3. Contas e armazenamento remoto</h2>
-    <p>Na versão examinada para a elaboração desta página, não foi identificado um sistema próprio de contas de usuário ou de envio das bibliotecas musicais para um servidor do desenvolvedor. Essa descrição deverá ser atualizada se funcionalidades futuras alterarem esse comportamento.</p>
-
-    <h2>4. Arquivos e permissões</h2>
-    <p>O usuário seleciona os arquivos ou pastas de música que deseja importar, por meio dos recursos de seleção de arquivos do Android. O acesso depende das permissões concedidas pelo próprio usuário e pelo sistema.</p>
-
-    <h2>5. Segurança e controle</h2>
-    <p>Os dados mantidos localmente ficam sujeitos às proteções do dispositivo e do sistema Android. O usuário pode gerenciar as permissões do aplicativo nas configurações do Android.</p>
-
-    <h2>6. Crianças e adolescentes</h2>
-    <p>O aplicativo é um reprodutor de música de uso geral e não solicita, intencionalmente, informações pessoais para criar uma conta.</p>
-
-    <h2>7. Alterações nesta política</h2>
-    <p>Esta política poderá ser atualizada quando funcionalidades, permissões ou serviços utilizados pelo aplicativo forem alterados. A data no início da página indica a revisão mais recente.</p>
-
-    <h2>8. Contato</h2>
-    <p>Em caso de dúvidas sobre o aplicativo ou esta política, entre em contato com o desenvolvedor:</p>
-    <p><strong>Desenvolvedor:</strong> Gustavoeude<br>
-    <strong>E-mail:</strong> <a href="mailto:gustavoeude008@gmail.com">gustavoeude008@gmail.com</a></p>
-
-    <p><em>Observação: esta página foi preparada com base nas funcionalidades identificadas no código disponível durante a revisão. Ela deve ser conferida novamente sempre que o aplicativo mudar e não substitui uma avaliação jurídica.</em></p>
+    <header><div class="logo" aria-hidden="true">♫</div><div class="brand">Música</div></header>
+    <div class="hero">
+      <div class="eyebrow">Reprodutor de música para Android</div>
+      <h1>Sua música.<br>Do seu jeito.</h1>
+      <p class="intro">Organize suas faixas, monte suas playlists e aproveite sua biblioteca musical em um reprodutor com identidade própria.</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/Gustavoeude/Aplicativo-de-reprodutor-de/releases/download/1.0.0/Musica.apk">Baixar Música · APK</a>
+        <a class="button secondary" href="https://github.com/Gustavoeude/Aplicativo-de-reprodutor-de/releases/tag/1.0.0">Ver versão 1.0.0</a>
+      </div>
+      <p class="version">Versão pública 1.0.0 · Build #101</p>
+    </div>
+    <section>
+      <h2>O que você encontra</h2>
+      <div class="features">
+        <div class="feature"><strong>Biblioteca musical</strong>Importe músicas e pastas do seu dispositivo.</div>
+        <div class="feature"><strong>Capas de álbuns</strong>Visualize as capas disponíveis para suas faixas.</div>
+        <div class="feature"><strong>Playlists</strong>Organize suas músicas e favoritas.</div>
+        <div class="feature"><strong>Reprodução em segundo plano</strong>Continue ouvindo enquanto usa outros aplicativos.</div>
+        <div class="feature"><strong>Controles de mídia</strong>Acesse os controles pela notificação e tela de bloqueio.</div>
+        <div class="feature"><strong>Interface personalizada</strong>Uma experiência visual própria para sua biblioteca.</div>
+      </div>
+    </section>
+    <section>
+      <h2>Sobre o aplicativo</h2>
+      <p style="color:var(--muted);margin:0">Música é um projeto independente desenvolvido por Gustavoeude. A compatibilidade pode variar conforme a versão do Android e o dispositivo.</p>
+    </section>
+    <footer>
+      <p><a href="./privacidade.html">Política de Privacidade</a> · <a href="https://github.com/Gustavoeude/Aplicativo-de-reprodutor-de">Código-fonte no GitHub</a></p>
+      <p>© 2026 Música · Gustavoeude</p>
+    </footer>
   </main>
-  <footer>© 2026 Gustavoeude · Música</footer>
 </body>
 </html>
