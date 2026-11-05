@@ -112,6 +112,11 @@ jobs:
           fi
           cp out/Musica.apk out/Nyx.apk
           VERSAO="${GITHUB_REF_NAME#v}"
-          gh release create "$GITHUB_REF_NAME" out/Nyx.apk \
-            --title "Nyx $VERSAO" \
-            --generate-notes
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            # a Release já foi criada pelo site: só anexa o APK (substitui se já existir)
+            gh release upload "$GITHUB_REF_NAME" out/Nyx.apk --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" out/Nyx.apk \
+              --title "Nyx $VERSAO" \
+              --generate-notes
+          fi
