@@ -4,7 +4,9 @@ import android.app.Notification;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.net.Uri;
+import android.util.LruCache;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -19,6 +21,8 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.common.util.BitmapLoader;
+import androidx.media3.datasource.DataSourceBitmapLoader;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.session.CommandButton;
 import androidx.media3.session.DefaultMediaNotificationProvider;
@@ -30,8 +34,10 @@ import androidx.media3.session.SessionCommands;
 import androidx.media3.session.SessionResult;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 
 import com.getcapacitor.JSObject;
 
@@ -74,6 +80,7 @@ public class MusicaPlaybackService extends MediaSessionService {
 
     private ExoPlayer player;
     private MediaSession session;
+    private PrefetchingBitmapLoader artworkBitmapLoader;
 
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
@@ -131,6 +138,8 @@ public class MusicaPlaybackService extends MediaSessionService {
     public void onCreate() {
         super.onCreate();
         installNotificationProvider();
+        artworkBitmapLoader = new PrefetchingBitmapLoader(
+                new DataSourceBitmapLoader.Builder(this).build());
         player = new ExoPlayer.Builder(this)
                 .setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(C.USAGE_MEDIA)
@@ -164,7 +173,9 @@ public class MusicaPlaybackService extends MediaSessionService {
         });
 
         final SessionCommand closeCmd = new SessionCommand("musica.fechar", Bundle.EMPTY);
-        MediaSession.Builder b = new MediaSession.Builder(this, new Wrapper(player)).setId("musica");
+        MediaSession.Builder b = new MediaSession.Builder(this, new Wrapper(player))
+                .setId("musica")
+                .setBitmapLoader(artworkBitmapLoader);
         b.setCallback(new MediaSession.Callback() {
             @Override
             public MediaSession.ConnectionResult onConnect(MediaSession s, MediaSession.ControllerInfo controller) {
@@ -317,11 +328,71 @@ public class MusicaPlaybackService extends MediaSessionService {
         return list;
     }
 
+    private void preloadArtwork(List<MediaItem> items) {
+        if (artworkBitmapLoader == null || items == null) return;
+        for (MediaItem item : items) {
+            Uri artworkUri = item.mediaMetadata.artworkUri;
+            if (artworkUri != null) artworkBitmapLoader.preload(artworkUri);
+        }
+    }
+
+    /** Cacheia a arte dos itens enfileirados para a sessão já ter o bitmap ao trocar de faixa. */
+    private static final class PrefetchingBitmapLoader implements BitmapLoader {
+        private static final int CACHE_ENTRIES = 8;
+        private final BitmapLoader delegate;
+        private final LruCache<Uri, ListenableFuture<Bitmap>> cache = new LruCache<>(CACHE_ENTRIES);
+
+        PrefetchingBitmapLoader(BitmapLoader delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public boolean supportsMimeType(String mimeType) {
+            return delegate.supportsMimeType(mimeType);
+        }
+
+        @Override
+        public ListenableFuture<Bitmap> decodeBitmap(byte[] data) {
+            return delegate.decodeBitmap(data);
+        }
+
+        @Override
+        public ListenableFuture<Bitmap> loadBitmap(Uri uri) {
+            final ListenableFuture<Bitmap> request;
+            synchronized (cache) {
+                ListenableFuture<Bitmap> cached = cache.get(uri);
+                if (cached != null) return cached;
+                request = delegate.loadBitmap(uri);
+                cache.put(uri, request);
+            }
+            Futures.addCallback(request, new FutureCallback<Bitmap>() {
+                @Override public void onSuccess(Bitmap bitmap) {}
+                @Override public void onFailure(Throwable error) {
+                    synchronized (cache) {
+                        if (cache.get(uri) == request) cache.remove(uri);
+                    }
+                }
+            }, MoreExecutors.directExecutor());
+            return request;
+        }
+
+        @Nullable
+        @Override
+        public ListenableFuture<Bitmap> loadBitmapFromMetadata(MediaMetadata metadata) {
+            return BitmapLoader.super.loadBitmapFromMetadata(metadata);
+        }
+
+        void preload(Uri uri) {
+            loadBitmap(uri);
+        }
+    }
+
     void setQueue(List<MediaItem> items, boolean autoplay, long positionMs, boolean repeatOne) {
         if (items.isEmpty()) {
             throw new IllegalArgumentException("Arquivo de música não encontrado no armazenamento do app.");
         }
         player.setRepeatMode(repeatOne ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
+        preloadArtwork(items);
         player.setMediaItems(items, 0, Math.max(0L, positionMs));
         player.prepare();
         player.setPlayWhenReady(autoplay);
@@ -337,7 +408,10 @@ public class MusicaPlaybackService extends MediaSessionService {
         if (n > idx + 1) player.removeMediaItems(idx + 1, n);
         // mantém as últimas 5 já tocadas: "anterior" funciona sem depender do JavaScript
         if (idx > 5) player.removeMediaItems(0, idx - 5);
-        if (!items.isEmpty()) player.addMediaItems(items);
+        if (!items.isEmpty()) {
+            preloadArtwork(items);
+            player.addMediaItems(items);
+        }
     }
 
     void play() { player.play(); }
