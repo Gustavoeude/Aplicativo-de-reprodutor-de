@@ -353,36 +353,71 @@ function pageAparencia(go) {
   return [wallpaperSec, sec, fontSec, shapeSec];
 }
 
+function directorySettingsGroup(title, description, folders, kind) {
+  const sec = el("div", "set-sec directory-settings");
+  const head = el("div", "directory-group-head");
+  const heading = el("div", "set-row-text");
+  heading.append(el("strong", "", title), el("span", "", description));
+  const add = el("button", "perm-btn directory-add-btn", "Adicionar");
+  add.type = "button";
+  add.setAttribute("aria-label", "Adicionar " + title.toLocaleLowerCase("pt-BR"));
+  add.onclick = async () => {
+    if (await addDirectory(kind)) refreshSettingsPage();
+  };
+  head.append(heading, add);
+  sec.appendChild(head);
+
+  if (!folders.length) {
+    sec.appendChild(el("div", "directory-empty", kind === "ignored"
+      ? "Nenhum diretório ignorado"
+      : "Nenhum diretório adicionado"));
+  }
+  folders.forEach(folder => {
+    const row = el("div", "set-row directory-row");
+    row.appendChild(el("span", "material-symbols-rounded directory-icon", "folder"));
+    const text = el("div", "set-row-text");
+    text.append(el("strong", "", folder.name), el("span", "", kind === "ignored"
+      ? "Ignorado nas novas varreduras; músicas já adicionadas permanecem"
+      : "Verificado automaticamente em busca de músicas novas"));
+    const remove = el("button", "directory-remove", "");
+    remove.type = "button";
+    remove.setAttribute("aria-label", "Remover " + folder.name);
+    remove.appendChild(el("span", "material-symbols-rounded", "close"));
+    remove.onclick = async () => {
+      await removeDirectory(kind, folder.uri);
+      refreshSettingsPage();
+    };
+    row.append(text, remove);
+    sec.appendChild(row);
+  });
+  return sec;
+}
+
 function pageBiblioteca() {
   const out = [];
-  if (MN && typeof chooseWatchedFolder === "function") {
-    const wsec = el("div", "set-sec");
-    wsec.appendChild(el("div", "set-label", "Pasta de músicas"));
-    const folder = getWatchedFolder();
-    const row = el("button", "set-row");
-    const rt = el("div", "set-row-text");
-    rt.append(
-      el("strong", "", folder ? folder.name : "Escolher pasta"),
-      el("span", "", folder ? "Toque para trocar de pasta. Músicas novas entram sozinhas." : "As músicas que caírem nessa pasta entram sozinhas no Nyx")
-    );
-    row.append(rt, el("span", "material-symbols-rounded", "folder"));
-    row.onclick = async () => { if (await chooseWatchedFolder()) refreshSettingsPage(); };
-    wsec.appendChild(row);
-    if (folder) {
-      const upd = el("button", "set-row");
-      const ut = el("div", "set-row-text");
-      ut.append(el("strong", "", "Atualizar agora"), el("span", "", "Procura músicas novas na pasta"));
-      upd.append(ut, el("span", "material-symbols-rounded", "refresh"));
-      upd.onclick = () => syncWatchedFolder(true);
-      wsec.appendChild(upd);
-      const del = el("button", "set-row");
-      const dt = el("div", "set-row-text");
-      dt.append(el("strong", "", "Parar de monitorar"), el("span", "", "Mantém as músicas que já foram adicionadas"));
-      del.append(dt, el("span", "material-symbols-rounded", "close"));
-      del.onclick = () => { stopWatchedFolder(); refreshSettingsPage(); };
-      wsec.appendChild(del);
+  if (MN && typeof addDirectory === "function") {
+    out.push(directorySettingsGroup(
+      "Lista de Diretórios",
+      "Pastas de música que o Nyx verifica automaticamente.",
+      getWatchedFolders(),
+      "watched"
+    ));
+    out.push(directorySettingsGroup(
+      "Diretórios ignorados",
+      "Pastas dentro dos diretórios monitorados que não devem ser varridas.",
+      getIgnoredFolders(),
+      "ignored"
+    ));
+    if (getWatchedFolders().length) {
+      const syncSec = el("div", "set-sec");
+      const syncRow = el("button", "set-row");
+      const syncText = el("div", "set-row-text");
+      syncText.append(el("strong", "", "Atualizar agora"), el("span", "", "Procura músicas novas nos diretórios adicionados"));
+      syncRow.append(syncText, el("span", "material-symbols-rounded", "refresh"));
+      syncRow.onclick = () => syncWatchedFolder(true);
+      syncSec.appendChild(syncRow);
+      out.push(syncSec);
     }
-    out.push(wsec);
   }
   const sec = el("div", "set-sec");
   const permRow = el("button", "set-row");
@@ -774,5 +809,3 @@ async function maybeAskPermissionsFirstRun() {
   if (lsGet("permsAsked", false)) return;
   setTimeout(() => openPermissions(true), 1500);
 }
-
-

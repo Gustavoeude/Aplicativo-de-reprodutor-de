@@ -1953,6 +1953,44 @@ body.disc .fp-cover::after {
   color: var(--md-on-surface-variant);
 }
 
+.directory-settings { padding-top: 8px; }
+.directory-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 58px;
+  padding: 2px 0 8px;
+}
+.directory-group-head .set-row-text { min-width: 0; }
+.directory-add-btn { min-height: 40px; padding: 0 16px; }
+.directory-empty {
+  padding: 2px 0 12px;
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+.directory-row { gap: 12px; min-height: 56px; }
+.directory-icon { flex: 0 0 auto; color: var(--md-on-surface-variant); }
+.directory-row .set-row-text strong { overflow-wrap: anywhere; }
+.directory-remove {
+  display: grid;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: var(--md-on-surface-variant);
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.directory-remove:active { background: color-mix(in srgb, var(--md-on-surface) 12%, transparent); }
+.directory-remove:focus-visible, .directory-add-btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
 /* switch (Material 3) */
 .m3-switch {
   position: relative;

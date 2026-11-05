@@ -1,20 +1,52 @@
 "use strict";
 
 /* ==========================================================
-   Pasta monitorada (só no app Android)
-   Você escolhe uma pasta uma vez; o Nyx adiciona sozinho as
-   músicas novas que aparecerem nela (ao abrir o app, ao voltar
-   para ele ou pelo botão "Atualizar agora").
+   Diretórios de música e diretórios ignorados (Android)
+   Pastas monitoradas são verificadas ao abrir/retomar o app e
+   pelo botão Atualizar agora. Pastas ignoradas são excluídas
+   da varredura em todos os diretórios monitorados.
    ========================================================== */
 let watchedSyncing = false;
 let watchedLastSync = 0;
 
-function getWatchedFolder() {
-  const f = lsGet("watchedFolder", null);
-  return f && f.uri ? f : null;
+function normalizeDirectoryList(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value.filter(item => {
+    if (!item || typeof item.uri !== "string" || !item.uri || seen.has(item.uri)) return false;
+    seen.add(item.uri);
+    return true;
+  }).map(item => ({ uri: item.uri, name: item.name || "pasta" }));
 }
 
-async function readWatchedFile(item) {
+function getWatchedFolders() {
+  const saved = lsGet("watchedFolders", null);
+  if (Array.isArray(saved)) return normalizeDirectoryList(saved);
+  const legacy = lsGet("watchedFolder", null);
+  return legacy && legacy.uri ? [{ uri: legacy.uri, name: legacy.name || "pasta" }] : [];
+}
+
+function getIgnoredFolders() {
+  return normalizeDirectoryList(lsGet("ignoredFolders", []));
+}
+
+function setDirectories(kind, list) {
+  lsSet(kind === "ignored" ? "ignoredFolders" : "watchedFolders", normalizeDirectoryList(list));
+}
+
+function watchedItemPaths(item, folder) {
+  const relativePath = String(item.relativePath || item.name || "").replace(/\\/g, "/");
+  const size = Number(item.size) || 0;
+  const lastModified = Number(item.lastModified) || 0;
+  return {
+    relativePath,
+    sourcePath: folder.uri + "::" + relativePath,
+    sourceKey: [item.name, size, lastModified, folder.uri + "::" + relativePath].join("::"),
+    legacyKey: [item.name, size, lastModified, relativePath].join("::")
+  };
+}
+
+async function readWatchedFile(item, folder) {
   const parts = [];
   let offset = 0;
   let done = false;
@@ -30,71 +62,122 @@ async function readWatchedFile(item) {
   }
   const file = new File(parts, item.name, {
     type: item.mimeType || "application/octet-stream",
-    lastModified: Number(item.lastModified) || Date.now()
+    lastModified: Number(item.lastModified) || 0
   });
-  try { Object.defineProperty(file, "sourcePath", { value: item.relativePath || item.name }); } catch (e) { logErr("pasta:30", e); }
+  const paths = watchedItemPaths(item, folder);
+  try { Object.defineProperty(file, "sourcePath", { value: paths.sourcePath }); } catch (e) { logErr("pasta:read", e); }
   return file;
 }
 
+function normalizedSidecarPath(item) {
+  return String(item.relativePath || item.name || "")
+    .replace(/\\/g, "/")
+    .replace(/\.[^/.]+$/, "")
+    .normalize("NFKC")
+    .toLocaleLowerCase("pt-BR");
+}
+
 async function syncWatchedFolder(manual) {
-  const folder = getWatchedFolder();
-  if (!MN || typeof MN.listFolderAudio !== "function" || !folder || watchedSyncing) return;
+  const folders = getWatchedFolders();
+  if (!MN || typeof MN.listFolderAudio !== "function" || !folders.length || watchedSyncing) return;
   watchedSyncing = true;
   try {
-    const listing = await MN.listFolderAudio({ uri: folder.uri });
-    const items = listing.files || [];
-    const have = new Set();
-    for (const s of songs) if (s.file) have.add(s.file.name + "::" + s.file.size);
+    const ignoredUris = getIgnoredFolders().map(folder => folder.uri);
+    const known = new Set();
+    const legacyKnown = new Set();
+    for (const song of songs) {
+      const key = song.sourceKey || (song.file ? fileIdentity(song.file) : "");
+      if (key) {
+        known.add(key);
+        legacyKnown.add(key);
+      }
+    }
 
-    const isLrc = n => /\.lrc$/i.test(n);
-    const novos = items.filter(i => !isLrc(i.name) && !have.has(i.name + "::" + (Number(i.size) || 0)));
-    const keys = new Set(novos.map(i => (i.relativePath || i.name).replace(/\.[^/.]+$/, "").normalize("NFKC").toLocaleLowerCase("pt-BR")));
-    const letras = items.filter(i => isLrc(i.name) &&
-      keys.has((i.relativePath || i.name).replace(/\.[^/.]+$/, "").normalize("NFKC").toLocaleLowerCase("pt-BR")));
+    const files = [];
+    let discovered = 0;
+    for (const folder of folders) {
+      const listing = await MN.listFolderAudio({ uri: folder.uri, ignoredUris });
+      const items = listing.files || [];
+      const audio = items.filter(item => !/\.lrc$/i.test(item.name || ""));
+      const fresh = audio.filter(item => {
+        const keys = watchedItemPaths(item, folder);
+        if (known.has(keys.sourceKey) || legacyKnown.has(keys.legacyKey)) return false;
+        known.add(keys.sourceKey);
+        return true;
+      });
+      if (!fresh.length) continue;
 
-    if (!novos.length) {
-      if (manual) showToast("Pasta já está atualizada");
+      discovered += fresh.length;
+      const sidecarKeys = new Set(fresh.map(normalizedSidecarPath));
+      const sidecars = items.filter(item => /\.lrc$/i.test(item.name || "") && sidecarKeys.has(normalizedSidecarPath(item)));
+      for (const item of fresh.concat(sidecars)) {
+        try {
+          files.push(await readWatchedFile(item, folder));
+        } catch (e) {
+          logErr("pasta:read-file", e);
+        }
+      }
+    }
+
+    if (!discovered || !files.some(file => !/\.lrc$/i.test(file.name || ""))) {
+      if (manual) showToast("Diretórios já estão atualizados");
       watchedLastSync = Date.now();
       return;
     }
-    showToast("Encontrei " + novos.length + (novos.length === 1 ? " música nova…" : " músicas novas…"));
-    const files = [];
-    for (const it of novos.concat(letras)) {
-      try { files.push(await readWatchedFile(it)); } catch (e) { logErr("pasta:60", e); }
-    }
-    await importFiles(files, "“" + (folder.name || "pasta") + "”");
+
+    showToast("Encontrei " + discovered + (discovered === 1 ? " música nova…" : " músicas novas…"));
+    await importFiles(files, "diretórios monitorados");
     watchedLastSync = Date.now();
   } catch (e) {
-    logErr("pasta:65", e);
-    if (manual) showToast("Não consegui ler a pasta. Escolha ela de novo.");
+    logErr("pasta:sync", e);
+    if (manual) showToast("Não consegui ler um diretório. Verifique o acesso à pasta nos Ajustes.");
   } finally {
     watchedSyncing = false;
   }
 }
 
-async function chooseWatchedFolder() {
+async function addDirectory(kind) {
   if (!MN || typeof MN.pickFolder !== "function") {
-    showToast("A pasta monitorada só funciona no app Android");
+    showToast("A seleção de diretórios só funciona no app Android");
     return false;
   }
   try {
     const selected = await MN.pickFolder();
     if (!selected || selected.cancelled) return false;
-    lsSet("watchedFolder", { uri: selected.uri, name: selected.name || "pasta" });
-    await syncWatchedFolder(true);
+    const ignored = kind === "ignored";
+    const current = ignored ? getIgnoredFolders() : getWatchedFolders();
+    if (current.some(folder => folder.uri === selected.uri)) {
+      showToast("Esse diretório já está na lista");
+      return false;
+    }
+    current.push({ uri: selected.uri, name: selected.name || "pasta" });
+    setDirectories(kind, current);
+    if (ignored) {
+      showToast("Diretório adicionado à lista de ignorados");
+      await syncWatchedFolder(false);
+    } else {
+      await syncWatchedFolder(true);
+    }
     return true;
   } catch (e) {
-    logErr("pasta:85", e);
-    showToast("Não foi possível escolher a pasta");
+    logErr("pasta:add", e);
+    showToast("Não foi possível adicionar esse diretório");
     return false;
   }
 }
 
-function stopWatchedFolder() {
-  lsSet("watchedFolder", null);
-  showToast("Pasta desvinculada. As músicas já adicionadas continuam.");
+async function removeDirectory(kind, uri) {
+  const ignored = kind === "ignored";
+  const current = ignored ? getIgnoredFolders() : getWatchedFolders();
+  setDirectories(kind, current.filter(folder => folder.uri !== uri));
+  showToast(ignored
+    ? "Diretório removido da lista de ignorados"
+    : "Diretório removido; as músicas já adicionadas continuam");
+  if (ignored) await syncWatchedFolder(false);
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && Date.now() - watchedLastSync > 30000) syncWatchedFolder(false);
+  if (document.visibilityState === "visible" && Date.now() - watchedLastSync > 30000) {
+    syncWatchedFolder(false);
+  }
 });
