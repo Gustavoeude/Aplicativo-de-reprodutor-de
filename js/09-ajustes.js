@@ -353,7 +353,72 @@ function pageAparencia(go) {
   return [wallpaperSec, sec, fontSec, shapeSec];
 }
 
+function directorySettingsGroup(title, description, folders, kind) {
+  const sec = el("div", "set-sec directory-settings");
+  const head = el("div", "directory-group-head");
+  const heading = el("div", "set-row-text");
+  heading.append(el("strong", "", title), el("span", "", description));
+  const add = el("button", "perm-btn directory-add-btn", "Adicionar");
+  add.type = "button";
+  add.setAttribute("aria-label", "Adicionar " + title.toLocaleLowerCase("pt-BR"));
+  add.onclick = async () => {
+    if (await addDirectory(kind)) refreshSettingsPage();
+  };
+  head.append(heading, add);
+  sec.appendChild(head);
+
+  if (!folders.length) {
+    sec.appendChild(el("div", "directory-empty", kind === "ignored"
+      ? "Nenhum diretório ignorado"
+      : "Nenhum diretório adicionado"));
+  }
+  folders.forEach(folder => {
+    const row = el("div", "set-row directory-row");
+    row.appendChild(el("span", "material-symbols-rounded directory-icon", "folder"));
+    const text = el("div", "set-row-text");
+    text.append(el("strong", "", folder.name), el("span", "", kind === "ignored"
+      ? "Ignorado nas novas varreduras; músicas já adicionadas permanecem"
+      : "Verificado automaticamente em busca de músicas novas"));
+    const remove = el("button", "directory-remove", "");
+    remove.type = "button";
+    remove.setAttribute("aria-label", "Remover " + folder.name);
+    remove.appendChild(el("span", "material-symbols-rounded", "close"));
+    remove.onclick = async () => {
+      await removeDirectory(kind, folder.uri);
+      refreshSettingsPage();
+    };
+    row.append(text, remove);
+    sec.appendChild(row);
+  });
+  return sec;
+}
+
 function pageBiblioteca() {
+  const out = [];
+  if (MN && typeof addDirectory === "function") {
+    out.push(directorySettingsGroup(
+      "Lista de Diretórios",
+      "Pastas de música que o Nyx verifica automaticamente.",
+      getWatchedFolders(),
+      "watched"
+    ));
+    out.push(directorySettingsGroup(
+      "Diretórios ignorados",
+      "Pastas dentro dos diretórios monitorados que não devem ser varridas.",
+      getIgnoredFolders(),
+      "ignored"
+    ));
+    if (getWatchedFolders().length) {
+      const syncSec = el("div", "set-sec");
+      const syncRow = el("button", "set-row");
+      const syncText = el("div", "set-row-text");
+      syncText.append(el("strong", "", "Atualizar agora"), el("span", "", "Procura músicas novas nos diretórios adicionados"));
+      syncRow.append(syncText, el("span", "material-symbols-rounded", "refresh"));
+      syncRow.onclick = () => syncWatchedFolder(true);
+      syncSec.appendChild(syncRow);
+      out.push(syncSec);
+    }
+  }
   const sec = el("div", "set-sec");
   const permRow = el("button", "set-row");
   const permText = el("div", "set-row-text");
@@ -364,7 +429,8 @@ function pageBiblioteca() {
   permRow.append(permText, el("span", "material-symbols-rounded", "folder"));
   permRow.onclick = () => openPermissions(false);
   sec.appendChild(permRow);
-  return [sec];
+  out.push(sec);
+  return out;
 }
 
 function pageReproducao() {
@@ -743,5 +809,3 @@ async function maybeAskPermissionsFirstRun() {
   if (lsGet("permsAsked", false)) return;
   setTimeout(() => openPermissions(true), 1500);
 }
-
-

@@ -98,9 +98,21 @@ public class MusicaPlugin extends Plugin {
             String value = call.getString("uri");
             if (value == null || value.isEmpty()) throw new IllegalArgumentException("Pasta inválida");
             Uri treeUri = Uri.parse(value);
+            List<String> ignoredDocumentIds = new ArrayList<>();
+            JSArray ignoredUris = call.getArray("ignoredUris");
+            if (ignoredUris != null) {
+                for (int i = 0; i < ignoredUris.length(); i++) {
+                    String ignoredValue = ignoredUris.optString(i, "");
+                    if (ignoredValue.isEmpty()) continue;
+                    Uri ignoredUri = Uri.parse(ignoredValue);
+                    if (treeUri.getAuthority() != null && treeUri.getAuthority().equals(ignoredUri.getAuthority())) {
+                        ignoredDocumentIds.add(DocumentsContract.getTreeDocumentId(ignoredUri));
+                    }
+                }
+            }
             JSArray files = new JSArray();
             String rootId = DocumentsContract.getTreeDocumentId(treeUri);
-            collectFolderAudio(treeUri, rootId, "", files);
+            collectFolderAudio(treeUri, rootId, "", files, ignoredDocumentIds);
 
             JSObject response = new JSObject();
             response.put("files", files);
@@ -110,12 +122,16 @@ public class MusicaPlugin extends Plugin {
         }
     }
 
-    private void collectFolderAudio(Uri treeUri, String parentId, String prefix, JSArray files) throws Exception {
+    private void collectFolderAudio(Uri treeUri, String parentId, String prefix, JSArray files,
+                                    List<String> ignoredDocumentIds) throws Exception {
+        if (isIgnoredDocument(parentId, ignoredDocumentIds)) return;
         Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId);
         String[] columns = {
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID,
                 DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                DocumentsContract.Document.COLUMN_MIME_TYPE
+                DocumentsContract.Document.COLUMN_MIME_TYPE,
+                DocumentsContract.Document.COLUMN_SIZE,
+                DocumentsContract.Document.COLUMN_LAST_MODIFIED
         };
         try (Cursor cursor = getContext().getContentResolver().query(
                 childrenUri, columns, null, null, null)) {
@@ -123,6 +139,8 @@ public class MusicaPlugin extends Plugin {
             int idColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID);
             int nameColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
             int mimeColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE);
+            int sizeColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_SIZE);
+            int modColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_LAST_MODIFIED);
             while (cursor.moveToNext()) {
                 String id = cursor.getString(idColumn);
                 String name = cursor.getString(nameColumn);
@@ -130,7 +148,9 @@ public class MusicaPlugin extends Plugin {
                 String relativePath = prefix.isEmpty() ? name : prefix + "/" + name;
 
                 if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
-                    collectFolderAudio(treeUri, id, relativePath, files);
+                    if (!isIgnoredDocument(id, ignoredDocumentIds)) {
+                        collectFolderAudio(treeUri, id, relativePath, files, ignoredDocumentIds);
+                    }
                 } else if (isAudioDocument(name, mime)) {
                     Uri fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, id);
                     JSObject item = new JSObject();
@@ -138,10 +158,20 @@ public class MusicaPlugin extends Plugin {
                     item.put("name", name);
                     item.put("relativePath", relativePath);
                     item.put("mimeType", mime == null ? "application/octet-stream" : mime);
+                    item.put("size", cursor.isNull(sizeColumn) ? 0L : cursor.getLong(sizeColumn));
+                    item.put("lastModified", cursor.isNull(modColumn) ? 0L : cursor.getLong(modColumn));
                     files.put(item);
                 }
             }
         }
+    }
+
+    private boolean isIgnoredDocument(String documentId, List<String> ignoredDocumentIds) {
+        if (documentId == null) return false;
+        for (String ignoredId : ignoredDocumentIds) {
+            if (documentId.equals(ignoredId) || documentId.startsWith(ignoredId + "/")) return true;
+        }
+        return false;
     }
 
     private boolean isAudioDocument(String name, String mime) {
