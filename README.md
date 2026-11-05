@@ -15,8 +15,6 @@
 
 Consulte a seção [Releases](https://github.com/Gustavoeude/Aplicativo-de-reprodutor-de/releases) para encontrar as versões disponibilizadas do aplicativo.
 
-> A versão publicada anteriormente pode continuar identificada como **Música**. O nome **Nyx** será usado na próxima versão após a atualização do aplicativo.
-
 ## Projeto
 
 Repositório oficial: https://github.com/Gustavoeude/Aplicativo-de-reprodutor-de
