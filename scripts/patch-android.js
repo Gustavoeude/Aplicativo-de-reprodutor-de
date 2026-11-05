@@ -114,6 +114,11 @@ const adaptive =
 fs.mkdirSync(path.join(res, "mipmap-anydpi-v26"), { recursive: true });
 fs.writeFileSync(path.join(res, "mipmap-anydpi-v26/ic_launcher.xml"), adaptive);
 fs.writeFileSync(path.join(res, "mipmap-anydpi-v26/ic_launcher_round.xml"), adaptive);
+// ícone monocromático e transparente usado nas notificações de mídia
+const notificationIcon = path.join(resSrc, "drawable-nodpi/ic_notification_music.png");
+const notificationDrawableDir = path.join(res, "drawable-nodpi");
+fs.mkdirSync(notificationDrawableDir, { recursive: true });
+fs.copyFileSync(notificationIcon, path.join(notificationDrawableDir, "ic_notification_music.png"));
 // ícone do botão "fechar" (X) do card de música
 fs.mkdirSync(path.join(res, "drawable"), { recursive: true });
 fs.writeFileSync(

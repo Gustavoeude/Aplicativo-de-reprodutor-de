@@ -1,9 +1,11 @@
 package br.com.gustavoeude.reprodutormusical;
 
+import android.app.Notification;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -19,6 +21,8 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.session.CommandButton;
+import androidx.media3.session.DefaultMediaNotificationProvider;
+import androidx.media3.session.MediaNotification;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
 import androidx.media3.session.SessionCommand;
@@ -126,6 +130,7 @@ public class MusicaPlaybackService extends MediaSessionService {
     @Override
     public void onCreate() {
         super.onCreate();
+        installNotificationProvider();
         player = new ExoPlayer.Builder(this)
                 .setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(C.USAGE_MEDIA)
@@ -206,6 +211,38 @@ public class MusicaPlaybackService extends MediaSessionService {
             PENDING.clear();
         }
         for (PendingCommand c : todo) safe(this, c);
+    }
+
+    private void installNotificationProvider() {
+        DefaultMediaNotificationProvider defaultProvider =
+                new DefaultMediaNotificationProvider.Builder(this).build();
+        setMediaNotificationProvider(new MediaNotification.Provider() {
+            @Override
+            public MediaNotification createNotification(
+                    MediaSession mediaSession,
+                    ImmutableList<CommandButton> mediaButtonPreferences,
+                    MediaNotification.ActionFactory actionFactory,
+                    MediaNotification.Provider.Callback callback) {
+                MediaNotification original = defaultProvider.createNotification(
+                        mediaSession, mediaButtonPreferences, actionFactory, callback);
+                if (Build.VERSION.SDK_INT < 24) return original;
+                Notification customized = Notification.Builder.recoverBuilder(
+                                MusicaPlaybackService.this, original.notification)
+                        .setSmallIcon(R.drawable.ic_notification_music)
+                        .build();
+                return new MediaNotification(original.notificationId, customized);
+            }
+
+            @Override
+            public MediaNotification.Provider.NotificationChannelInfo getNotificationChannelInfo() {
+                return defaultProvider.getNotificationChannelInfo();
+            }
+
+            @Override
+            public boolean handleCustomCommand(MediaSession mediaSession, String action, Bundle extras) {
+                return defaultProvider.handleCustomCommand(mediaSession, action, extras);
+            }
+        });
     }
 
     /** Faz os botões "anterior/próxima" da notificação funcionarem com a fila gerida pelo app. */

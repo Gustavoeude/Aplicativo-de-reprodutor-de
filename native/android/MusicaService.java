@@ -175,7 +175,7 @@ public class MusicaService extends Service {
         Notification.Builder b = Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(this, CHANNEL)
                 : new Notification.Builder(this);
-        b.setSmallIcon(android.R.drawable.stat_sys_headset)
+        b.setSmallIcon(R.drawable.ic_notification_music)
                 .setContentTitle(title)
                 .setContentText(artist)
                 .setLargeIcon(cover)
