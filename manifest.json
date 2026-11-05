@@ -1,6 +1,6 @@
 {
-  "name": "Música",
-  "short_name": "Música",
+  "name": "Nyx",
+  "short_name": "Nyx",
   "description": "Seu player de músicas local",
   "lang": "pt-BR",
   "start_url": "./index.html",
