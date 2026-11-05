@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main, "fix/**"]
+    tags: ["v*"]
   pull_request:
     branches: [main]
     paths:
@@ -24,6 +25,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Baixar código
         uses: actions/checkout@v4
@@ -97,3 +100,18 @@ jobs:
           name: Musica-apk
           path: out/*.apk
           if-no-files-found: error
+
+      - name: Publicar a Release (só quando a tag começa com "v")
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -f out/Musica.apk ]; then
+            echo "APK assinado não encontrado (faltam KEYSTORE_PASSWORD/KEYSTORE_BASE64). Release não publicada."
+            exit 1
+          fi
+          cp out/Musica.apk out/Nyx.apk
+          VERSAO="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" out/Nyx.apk \
+            --title "Nyx $VERSAO" \
+            --generate-notes
