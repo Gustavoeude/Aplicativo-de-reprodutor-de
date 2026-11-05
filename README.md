@@ -1,20 +1,29 @@
-# Nyx
+🌙 Nyx — Reprodutor de Música
 
-**Nyx** é um reprodutor de música para Android, desenvolvido para oferecer uma experiência simples, moderna e personalizada.
+Um reprodutor de música para Android, desenvolvido para oferecer uma experiência personalizada de reprodução e organização musical.
 
-## Recursos
+✨ Recursos
 
-- Importação de músicas e pastas do dispositivo.
-- Reprodução de música em segundo plano.
-- Organização da biblioteca e criação de playlists.
+- Reprodução de músicas locais.
+- Organização da biblioteca musical.
+- Busca de músicas.
+- Favoritos.
 - Exibição de capas de álbuns.
-- Controles de reprodução na notificação e na tela de bloqueio.
-- Interface personalizada.
+- Reprodução em segundo plano.
+- Controles de reprodução.
+- Exibição de letras.
 
-## Download
+📦 Instalação
 
-Consulte a seção [Releases](https://github.com/Gustavoeude/Aplicativo-de-reprodutor-de/releases) para encontrar as versões disponibilizadas do aplicativo.
+Baixe o APK disponível na seção Releases deste repositório e instale no seu dispositivo Android.
 
-## Projeto
+🛠️ Tecnologias
 
-Repositório oficial: https://github.com/Gustavoeude/Aplicativo-de-reprodutor-de
+- HTML
+- CSS
+- JavaScript
+- Capacitor
+
+---
+
+Nyx — sua música, do seu jeito.
