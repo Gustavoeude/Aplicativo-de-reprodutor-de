@@ -148,6 +148,9 @@ if (missingMedia3.length) {
 }
 const code = parseInt(process.env.GITHUB_RUN_NUMBER || "1", 10);
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-g = g.replace(/versionCode\s+\d+/, "versionCode " + code).replace(/versionName\s+"[^"]*"/, 'versionName "' + (pkg.version || "1.0.0") + "." + code + '"');
+const releaseTag = process.env.GITHUB_REF_TYPE === "tag" && /^v\d+\.\d+\.\d+$/.test(process.env.GITHUB_REF_NAME || "");
+const versionName = releaseTag ? pkg.version : (pkg.version || "1.0.0") + "." + code;
+g = g.replace(/versionCode\s+\d+/, "versionCode " + code).replace(/versionName\s+"[^"]*"/, 'versionName "' + versionName + '"');
 fs.writeFileSync(gradlePath, g);
 console.log("versionCode:", code);
+console.log("versionName:", versionName);
