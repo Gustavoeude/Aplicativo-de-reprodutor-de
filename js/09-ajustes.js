@@ -354,6 +354,36 @@ function pageAparencia(go) {
 }
 
 function pageBiblioteca() {
+  const out = [];
+  if (MN && typeof chooseWatchedFolder === "function") {
+    const wsec = el("div", "set-sec");
+    wsec.appendChild(el("div", "set-label", "Pasta de músicas"));
+    const folder = getWatchedFolder();
+    const row = el("button", "set-row");
+    const rt = el("div", "set-row-text");
+    rt.append(
+      el("strong", "", folder ? folder.name : "Escolher pasta"),
+      el("span", "", folder ? "Toque para trocar de pasta. Músicas novas entram sozinhas." : "As músicas que caírem nessa pasta entram sozinhas no Nyx")
+    );
+    row.append(rt, el("span", "material-symbols-rounded", "folder"));
+    row.onclick = async () => { if (await chooseWatchedFolder()) refreshSettingsPage(); };
+    wsec.appendChild(row);
+    if (folder) {
+      const upd = el("button", "set-row");
+      const ut = el("div", "set-row-text");
+      ut.append(el("strong", "", "Atualizar agora"), el("span", "", "Procura músicas novas na pasta"));
+      upd.append(ut, el("span", "material-symbols-rounded", "refresh"));
+      upd.onclick = () => syncWatchedFolder(true);
+      wsec.appendChild(upd);
+      const del = el("button", "set-row");
+      const dt = el("div", "set-row-text");
+      dt.append(el("strong", "", "Parar de monitorar"), el("span", "", "Mantém as músicas que já foram adicionadas"));
+      del.append(dt, el("span", "material-symbols-rounded", "close"));
+      del.onclick = () => { stopWatchedFolder(); refreshSettingsPage(); };
+      wsec.appendChild(del);
+    }
+    out.push(wsec);
+  }
   const sec = el("div", "set-sec");
   const permRow = el("button", "set-row");
   const permText = el("div", "set-row-text");
@@ -364,7 +394,8 @@ function pageBiblioteca() {
   permRow.append(permText, el("span", "material-symbols-rounded", "folder"));
   permRow.onclick = () => openPermissions(false);
   sec.appendChild(permRow);
-  return [sec];
+  out.push(sec);
+  return out;
 }
 
 function pageReproducao() {

@@ -115,7 +115,9 @@ public class MusicaPlugin extends Plugin {
         String[] columns = {
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID,
                 DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                DocumentsContract.Document.COLUMN_MIME_TYPE
+                DocumentsContract.Document.COLUMN_MIME_TYPE,
+                DocumentsContract.Document.COLUMN_SIZE,
+                DocumentsContract.Document.COLUMN_LAST_MODIFIED
         };
         try (Cursor cursor = getContext().getContentResolver().query(
                 childrenUri, columns, null, null, null)) {
@@ -123,6 +125,8 @@ public class MusicaPlugin extends Plugin {
             int idColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID);
             int nameColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
             int mimeColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE);
+            int sizeColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_SIZE);
+            int modColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_LAST_MODIFIED);
             while (cursor.moveToNext()) {
                 String id = cursor.getString(idColumn);
                 String name = cursor.getString(nameColumn);
@@ -138,6 +142,8 @@ public class MusicaPlugin extends Plugin {
                     item.put("name", name);
                     item.put("relativePath", relativePath);
                     item.put("mimeType", mime == null ? "application/octet-stream" : mime);
+                    item.put("size", cursor.isNull(sizeColumn) ? 0L : cursor.getLong(sizeColumn));
+                    item.put("lastModified", cursor.isNull(modColumn) ? 0L : cursor.getLong(modColumn));
                     files.put(item);
                 }
             }
