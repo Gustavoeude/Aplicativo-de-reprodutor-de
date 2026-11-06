@@ -2630,3 +2630,28 @@ body.light .ob {
 }
 .ob button:focus { outline: none; }
 .ob button:focus-visible { outline: 2px solid var(--ob-text); outline-offset: 3px; }
+
+/* ---- animações do onboarding: entrada em cascata e flutuação suave ---- */
+.ob { transition: opacity .7s var(--ease); }
+.ob-stage { opacity: 1; transform: none; }
+.ob-stage.ob-in .ob-title,
+.ob-stage.ob-in .ob-text { animation: ob-rise .7s var(--ease) both; }
+.ob-stage.ob-in .ob-text { animation-delay: .08s; }
+.ob-stage.ob-in .ob-card-b { animation: ob-pop-b .9s var(--ease-o, cubic-bezier(.2,.9,.25,1.1)) .18s both; }
+.ob-stage.ob-in .ob-card-a { animation: ob-pop-a .9s var(--ease-o, cubic-bezier(.2,.9,.25,1.1)) .26s both; }
+.ob-stage.ob-in .ob-main { animation: ob-pop-m .9s cubic-bezier(.2,.9,.25,1.1) .34s both; }
+.ob-stage.ob-in .ob-chip-1 { animation: ob-chip .7s var(--ease) .55s both, ob-float 5s ease-in-out 1.3s infinite; }
+.ob-stage.ob-in .ob-chip-2 { animation: ob-chip .7s var(--ease) .65s both, ob-float 6s ease-in-out 1.4s infinite reverse; }
+.ob-stage.ob-in .ob-chip-3 { animation: ob-chip .7s var(--ease) .75s both, ob-float 5.5s ease-in-out 1.5s infinite; }
+.ob-foot { animation: ob-rise .7s var(--ease) .5s both; }
+.ob-top { animation: ob-fade .8s var(--ease) both; }
+@keyframes ob-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes ob-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ob-pop-b { from { opacity: 0; transform: translate(14px, 18px) rotate(24deg) scale(.7); } to { opacity: 1; transform: rotate(13deg); } }
+@keyframes ob-pop-a { from { opacity: 0; transform: translate(-14px, 18px) rotate(-22deg) scale(.7); } to { opacity: 1; transform: rotate(-11deg); } }
+@keyframes ob-pop-m { from { opacity: 0; transform: translateY(24px) rotate(-14deg) scale(.6); } to { opacity: 1; transform: rotate(-4deg); } }
+@keyframes ob-chip { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: none; } }
+@keyframes ob-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -7px; } }
+@media (prefers-reduced-motion: reduce) {
+  .ob, .ob-stage *, .ob-foot, .ob-top { animation: none !important; transition: none !important; }
+}
