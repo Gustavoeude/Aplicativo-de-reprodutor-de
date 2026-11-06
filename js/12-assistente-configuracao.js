@@ -134,7 +134,7 @@ function configurationAssistantStepContent(step) {
         const list = el("div", "onboarding-folder-list");
         ignored.forEach(folder => {
           const row = el("div", "onboarding-folder-row");
-          row.appendChild(el("span", "material-symbols-rounded", "speaker_notes_off"));
+          row.appendChild(el("span", "material-symbols-rounded", "folder"));
           row.appendChild(el("span", "", folder.name));
           const remove = el("button", "onboarding-remove", "Remover");
           remove.type = "button";
