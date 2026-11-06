@@ -391,7 +391,7 @@ function closeConfigurationAssistant() {
 }
 
 function maybeStartConfigurationAssistant() {
-  if (lsGet(CONFIG_ASSISTANT_DONE_KEY, false) || lsGet("permsAsked", false) || configAssistantOverlay) return;
+  if (lsGet(CONFIG_ASSISTANT_DONE_KEY, false) || configAssistantOverlay) return;
   configAssistantReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   configAssistantOverlay = el("div", "configuration-assistant-scrim");
   configAssistantOverlay.setAttribute("role", "presentation");
@@ -424,3 +424,6 @@ function maybeStartConfigurationAssistant() {
   document.body.classList.add("no-scroll");
   renderConfigurationAssistant();
 }
+
+// Abre o assistente antes da tela inicial, logo após o carregamento dos scripts.
+maybeStartConfigurationAssistant();
