@@ -2675,3 +2675,28 @@ body.light .ob {
 @media (prefers-reduced-motion: reduce) {
   .ob-stage, .ob-foot, .ob-dots span { transition: none !important; animation: none !important; }
 }
+
+/* ---- primeira instalação: nada do app aparece antes do tutorial ---- */
+html.ob-pending, html.ob-pending body { background: #0e0e10; }
+html.ob-pending body > *:not(.ob):not(script):not(link) { visibility: hidden; }
+.ob.ob-now { transition: none; }
+
+/* ---- resultado da ação, botão ocupado e links ---- */
+.ob-result {
+  display: flex; align-items: center; gap: 12px; margin-top: 18px; padding: 12px 14px;
+  border-radius: 18px; background: var(--ob-card-2); border: 1px solid var(--ob-line);
+  animation: ob-rise .5s var(--ease) both;
+}
+.ob-result-ic { width: 28px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--ob-fg); }
+.ob-result-ic svg { width: 26px; height: 26px; }
+.ob-result.warn .ob-result-ic { color: var(--ob-dim); }
+.ob-result-tx { display: flex; flex-direction: column; min-width: 0; }
+.ob-result-tx strong { font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ob-result-tx span { font-size: 13px; color: var(--ob-dim); line-height: 1.35; }
+.ob-art.small { min-height: 150px; }
+.ob-links { display: flex; justify-content: center; gap: 4px; flex-wrap: wrap; }
+.ob-spin { display: none; width: 18px; height: 18px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: ob-rot .8s linear infinite; }
+.ob-primary.busy { pointer-events: none; opacity: .9; }
+.ob-primary.busy .ob-spin { display: block; }
+.ob-primary.busy svg { display: none; }
+@keyframes ob-rot { to { transform: rotate(360deg); } }
