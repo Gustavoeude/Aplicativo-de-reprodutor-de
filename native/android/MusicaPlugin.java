@@ -538,4 +538,25 @@ public class MusicaPlugin extends Plugin {
         o.put("player", true);
         call.resolve(o);
     }
+    /** Abre as opções de otimização de bateria do Android sem alterar a política automaticamente. */
+    @PluginMethod
+    public void openBatterySettings(PluginCall call) {
+        try {
+            Intent intent = new Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            try {
+                Intent fallback = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:" + getContext().getPackageName()));
+                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(fallback);
+                call.resolve();
+            } catch (Exception fallbackError) {
+                call.reject("Não foi possível abrir as configurações de bateria.", fallbackError);
+            }
+        }
+    }
+
 }
