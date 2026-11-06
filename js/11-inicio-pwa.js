@@ -56,6 +56,7 @@ setTimeout(() => $("homePage").classList.remove("stagger"), 1100);
 
 loadSongs().then(() => {
   refreshAll();
+  setTimeout(maybeStartConfigurationAssistant, 1500);
   if (typeof syncWatchedFolder === "function") syncWatchedFolder(false);
   if (nativeMode) nativeResync(true); // se o player nativo já estava tocando, acompanha
   if (nativeAutoDisabled) setTimeout(() => showToast("O player nativo foi desligado depois de falhas. Dá para religar nos Ajustes."), 1500);
