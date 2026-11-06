@@ -2655,3 +2655,23 @@ body.light .ob {
 @media (prefers-reduced-motion: reduce) {
   .ob, .ob-stage *, .ob-foot, .ob-top { animation: none !important; transition: none !important; }
 }
+
+/* ---- transição entre passos (vai e volta) ---- */
+.ob-stage { transition: opacity .24s ease, transform .24s ease; }
+.ob-stage.ob-out-l { opacity: 0; transform: translateX(-34px); }
+.ob-stage.ob-out-r { opacity: 0; transform: translateX(34px); }
+.ob-stage.ob-in.ob-from-r { animation: ob-in-r .5s var(--ease) both; }
+.ob-stage.ob-in.ob-from-l { animation: ob-in-l .5s var(--ease) both; }
+@keyframes ob-in-r { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+@keyframes ob-in-l { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
+.ob-foot { transition: opacity .2s ease, transform .2s ease; }
+.ob-foot.ob-foot-out { opacity: 0; transform: translateY(10px); }
+.ob-dots span { transition: background .4s ease, flex-grow .4s var(--ease), max-width .4s var(--ease); }
+.ob-dots span.on { max-width: 48px; flex-grow: 1.8; }
+.ob-primary, .ob-back { transition: transform .15s var(--ease), background .2s; }
+.ob-back:active { transform: scale(.94); }
+.ob-primary svg { transition: transform .25s var(--ease); }
+.ob-primary:hover svg, .ob-primary:active svg { transform: translateX(4px); }
+@media (prefers-reduced-motion: reduce) {
+  .ob-stage, .ob-foot, .ob-dots span { transition: none !important; animation: none !important; }
+}

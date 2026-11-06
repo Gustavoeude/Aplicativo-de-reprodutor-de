@@ -103,12 +103,36 @@ function obFinish() {
   if (back) back.focus();
 }
 
+let obDir = 1;
+let obBusy = false;
+
+// Troca de passo com saída suave e entrada na direção certa.
+function obGo(delta) {
+  if (obBusy || !obRoot) return;
+  const reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  obDir = delta > 0 ? 1 : -1;
+  if (reduced) { obIndex += delta; obRender(); return; }
+  obBusy = true;
+  const stage = obRoot.querySelector(".ob-stage");
+  const foot = obRoot.querySelector(".ob-foot");
+  stage.classList.add(obDir > 0 ? "ob-out-l" : "ob-out-r");
+  foot.classList.add("ob-foot-out");
+  setTimeout(() => {
+    obBusy = false;
+    if (!obRoot) return;
+    obIndex += delta;
+    obRender();
+  }, 240);
+}
+
 function obRender() {
   const step = obList[obIndex];
   const last = obIndex === obList.length - 1;
   const stage = obRoot.querySelector(".ob-stage");
   stage.innerHTML = "";
-  stage.classList.remove("ob-in");
+  stage.classList.remove("ob-in", "ob-out-l", "ob-out-r", "ob-from-l", "ob-from-r");
+  stage.classList.add(obDir > 0 ? "ob-from-r" : "ob-from-l");
+  obRoot.querySelector(".ob-foot").classList.remove("ob-foot-out");
 
   // progresso
   const dots = obRoot.querySelector(".ob-dots");
@@ -153,7 +177,7 @@ function obRender() {
   foot.innerHTML = "";
   const advance = () => {
     if (last) obFinish();
-    else { obIndex++; obRender(); }
+    else obGo(1);
   };
 
   if (step.secondary) {
@@ -172,7 +196,7 @@ function obRender() {
     const back = el("button", "ob-back");
     back.innerHTML = obIcon("back");
     back.setAttribute("aria-label", "Voltar");
-    back.onclick = () => { obIndex--; obRender(); };
+    back.onclick = () => obGo(-1);
     row.appendChild(back);
   }
   const main2 = el("button", "ob-primary");
@@ -197,6 +221,8 @@ function startOnboarding() {
   if (obRoot) return;
   obList = obSteps();
   obIndex = 0;
+  obDir = 1;
+  obBusy = false;
 
   const root = el("div", "ob");
   root.setAttribute("role", "dialog");
