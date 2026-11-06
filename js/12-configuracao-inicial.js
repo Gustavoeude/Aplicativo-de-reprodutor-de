@@ -1,112 +1,232 @@
 "use strict";
 
-/* Assistente de primeira configuração do Nyx. Cada etapa aciona a função real correspondente. */
+/* Assistente de primeira configuração do Nyx — layout individual baseado na referência aprovada. */
 (function () {
   const KEY = "nyxSetupCompleted";
   const steps = [
-    { title: "Bem-vindo ao Nyx", desc: "Vamos preparar sua biblioteca e deixar o aplicativo pronto para ouvir música.", icon: "🌙" },
-    { title: "Adicionar músicas", desc: "Escolha uma pasta ou selecione arquivos. O Android só concede acesso ao que você escolher.", icon: "🎵" },
-    { title: "Notificações", desc: "Ative as notificações para acompanhar a reprodução quando o Android solicitar essa permissão.", icon: "🔔" },
-    { title: "Pastas ignoradas", desc: "Escolha pastas que o Nyx deve ignorar quando procurar músicas em diretórios monitorados.", icon: "📁" },
-    { title: "Navegação", desc: "Escolha se deseja manter os gestos de deslizar entre Início, Buscar e Biblioteca.", icon: "✦" },
-    { title: "Bateria", desc: "As restrições de bateria podem limitar a reprodução em segundo plano. Você pode revisar as opções do Android.", icon: "🔋" }
+    { title: "Bem-vindo\nao Nyx", desc: "Vamos deixar tudo pronto para\nvocê.", icon: "music_note" },
+    { title: "Permissão\nde mídia", desc: "O Nyx precisa acessar seus áudios\npara montar a biblioteca.", icon: "library_music" },
+    { title: "Notificações", desc: "Controle a música pela tela de\nbloqueio e pela barra de\nnotificações.", icon: "notifications" },
+    { title: "Pastas\nexcluídas", desc: "Toque para ignorar uma pasta na\nbusca.", icon: "folder" },
+    { title: "Navegação", desc: "Escolha o estilo da barra inferior.", icon: "navigation" },
+    { title: "Bateria", desc: "Alguns aparelhos encerram apps\nem segundo plano. Revise a\notimização de bateria.", icon: "battery_saver" }
   ];
-  let root, step = 0;
+  let root = null, step = 0;
 
+  const $ = (selector) => root && root.querySelector(selector);
+  function make(tag, cls, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
   function button(label, cls, fn) {
-    const b = document.createElement("button");
-    b.type = "button"; b.className = cls; b.textContent = label;
+    const b = make("button", cls, label);
+    b.type = "button";
     b.addEventListener("click", fn);
     return b;
   }
-  function finish() {
-    lsSet(KEY, true);
-    if (root) root.remove();
-    showToast("Configuração concluída. Aproveite o Nyx!");
+  function icon(name) {
+    const el = make("span", "material-symbols-rounded", name);
+    el.setAttribute("aria-hidden", "true");
+    return el;
+  }
+  function hideForPicker() {
+    if (root) root.style.visibility = "hidden";
+  }
+  function showAfterPicker() {
+    if (root) root.style.visibility = "visible";
+    render();
+  }
+  function progress() {
+    const holder = $(".nyx-setup-progress");
+    holder.replaceChildren();
+    steps.forEach((_, i) => {
+      const dot = make("i", i <= step ? "active" : "");
+      holder.appendChild(dot);
+    });
+  }
+  function illustration(name) {
+    const wrap = make("div", "nyx-setup-illustration " + name);
+    const back = make("div", "nyx-setup-blob");
+    const tile = make("div", "nyx-setup-tile");
+    tile.appendChild(icon(name === "welcome" ? "music_note" : name === "media" ? "library_music" : name === "notifications" ? "notifications" : name === "folders" ? "folder" : name === "navigation" ? "widgets" : "battery_saver"));
+    wrap.append(back, tile);
+    const sparkle1 = make("span", "nyx-setup-sparkle", "✦");
+    const sparkle2 = make("span", "nyx-setup-sparkle small", "✦");
+    wrap.append(sparkle1, sparkle2);
+    return wrap;
+  }
+  function folderList() {
+    const list = make("div", "nyx-setup-folder-list");
+    const folders = typeof getIgnoredFolders === "function" ? getIgnoredFolders() : [];
+    if (!folders.length) {
+      list.appendChild(make("p", "nyx-setup-empty", "Nenhuma pasta excluída ainda."));
+      return list;
+    }
+    folders.forEach(folder => {
+      const row = make("button", "nyx-setup-folder");
+      row.type = "button";
+      row.append(icon("folder"), make("span", "", folder.name || "Pasta"));
+      row.appendChild(icon("check_box"));
+      row.addEventListener("click", async () => {
+        await removeDirectory("ignored", folder.uri);
+        render();
+      });
+      list.appendChild(row);
+    });
+    return list;
   }
   function render() {
     if (!root) return;
     const item = steps[step];
-    root.querySelector(".nyx-setup-step").textContent = "ETAPA " + (step + 1) + " DE " + steps.length;
-    root.querySelector(".nyx-setup-progress i").style.width = ((step + 1) / steps.length * 100) + "%";
-    root.querySelector(".nyx-setup-icon").textContent = item.icon;
-    root.querySelector("h1").textContent = item.title;
-    root.querySelector(".nyx-setup-desc").textContent = item.desc;
-    const actions = root.querySelector(".nyx-setup-actions");
+    $(".nyx-setup-step-title").textContent = item.title;
+    $(".nyx-setup-desc").textContent = item.desc;
+    $(".nyx-setup-step-count").textContent = (step + 1) + " / " + steps.length;
+    progress();
+
+    const art = $(".nyx-setup-art");
+    art.replaceChildren(illustration(["welcome","media","notifications","folders","navigation","battery"][step]));
+    const actions = $(".nyx-setup-actions");
     actions.replaceChildren();
 
-    if (step === 1) {
-      actions.append(
-        button("Escolher pasta de músicas", "nyx-setup-primary", () => { importFolder(); }),
-        button("Selecionar arquivos", "nyx-setup-secondary", () => { openFilePicker(); })
-      );
-    } else if (step === 2) {
-      actions.append(button("Solicitar notificações", "nyx-setup-primary", async () => {
+    if (step === 0) {
+      actions.appendChild(button("Vamos lá!", "nyx-setup-primary", next));
+    } else if (step === 1) {
+      actions.appendChild(button("Permitir acesso", "nyx-setup-primary", async () => {
+        hideForPicker();
         try {
-          if (MN && typeof MN.requestNotifications === "function") {
+          const ok = await addDirectory("watched");
+          if (!ok) showToast("Você pode conceder acesso escolhendo uma pasta de músicas.");
+        } catch (e) {
+          logErr("setup:media", e);
+          showToast("Não foi possível acessar essa pasta.");
+        }
+        showAfterPicker();
+      }));
+      actions.appendChild(button("Selecionar arquivos", "nyx-setup-secondary", () => {
+        hideForPicker();
+        try { openFilePicker(); } catch (e) { logErr("setup:files", e); }
+        showAfterPicker();
+      }));
+    } else if (step === 2) {
+      actions.appendChild(button("Ativar notificações", "nyx-setup-primary", async () => {
+        try {
+          if (typeof MN !== "undefined" && MN.requestNotifications) {
             const result = await MN.requestNotifications();
-            showToast(result && result.granted ? "Permissão de notificações concedida." : "Permissão não concedida. Você pode ativá-la depois nos Ajustes do Android.");
-          } else showToast("A permissão de notificações só é solicitada na versão Android.");
-        } catch (e) { logErr("setup:notifications", e); showToast("Não foi possível solicitar a permissão."); }
+            showToast(result && result.granted ? "Notificações ativadas." : "Permissão não concedida. Você pode ativá-la depois.");
+          } else showToast("Disponível na versão Android.");
+        } catch (e) {
+          logErr("setup:notifications", e);
+          showToast("Não foi possível solicitar a permissão.");
+        }
         next();
       }));
-      actions.append(button("Agora não", "nyx-setup-text", next));
     } else if (step === 3) {
-      actions.append(button("Escolher pasta para ignorar", "nyx-setup-primary", async () => {
-        const ok = await addDirectory("ignored");
-        if (ok) showToast("Pasta adicionada à lista de ignorados.");
+      actions.appendChild(folderList());
+      actions.appendChild(button("＋  Adicionar pasta", "nyx-setup-primary", async () => {
+        hideForPicker();
+        try { await addDirectory("ignored"); }
+        catch (e) { logErr("setup:ignored", e); }
+        showAfterPicker();
+      }));
+    } else if (step === 4) {
+      const preview = make("div", "nyx-setup-nav-preview");
+      preview.append(make("div", "nyx-setup-nav-lines"));
+      const nav = make("div", "nyx-setup-nav-bar");
+      ["home","search","library_music","more_horiz"].forEach((name, i) => {
+        const item = make("span", i === 0 ? "selected" : "");
+        item.appendChild(icon(name));
+        nav.appendChild(item);
+      });
+      preview.appendChild(nav);
+      actions.appendChild(preview);
+      const swipe = !!(typeof settings !== "undefined" && settings.swipe);
+      actions.appendChild(button("Estilo padrão\n" + (swipe ? "Gestos ativados" : "Pílula flutuante"), "nyx-setup-choice", () => {
+        settings.swipe = !settings.swipe;
+        saveSettings();
         render();
       }));
-      const ignored = typeof getIgnoredFolders === "function" ? getIgnoredFolders() : [];
-      const list = document.createElement("p");
-      list.className = "nyx-setup-note";
-      list.textContent = ignored.length ? "Pastas ignoradas: " + ignored.map(x => x.name).join(", ") : "Nenhuma pasta ignorada ainda.";
-      actions.append(list);
-    } else if (step === 4) {
-      actions.append(
-        button("Manter gestos de deslizar: " + (settings.swipe ? "ativados" : "desativados"), "nyx-setup-primary", () => {
-          settings.swipe = !settings.swipe; saveSettings(); render();
-        }),
-        button("Continuar com essa escolha", "nyx-setup-secondary", next)
-      );
+      actions.appendChild(button("Continuar com essa escolha", "nyx-setup-primary", next));
     } else if (step === 5) {
-      actions.append(button("Abrir configurações de bateria", "nyx-setup-primary", async () => {
+      actions.appendChild(button("Desativar otimização", "nyx-setup-primary", async () => {
         try {
-          if (MN && typeof MN.openBatterySettings === "function") await MN.openBatterySettings();
-          else showToast("Essa opção está disponível na versão Android.");
-        } catch (e) { logErr("setup:battery", e); showToast("Não foi possível abrir as configurações de bateria."); }
+          if (typeof MN !== "undefined" && MN.openBatterySettings) await MN.openBatterySettings();
+          else showToast("Abra as configurações de bateria do Android.");
+        } catch (e) {
+          logErr("setup:battery", e);
+          showToast("Não foi possível abrir as configurações.");
+        }
       }));
     }
 
-    if (step !== 0) actions.append(button("Voltar", "nyx-setup-text", () => { step--; render(); }));
-    if (step === 0) actions.append(button("Começar", "nyx-setup-primary", next));
-    else if (step === 1 || step === 3 || step === 5) actions.append(button("Pular esta etapa", "nyx-setup-text", next));
-    if (step === steps.length - 1) actions.append(button("Concluir", "nyx-setup-primary", finish));
+    const footer = $(".nyx-setup-footer");
+    footer.replaceChildren();
+    if (step > 0) footer.appendChild(button("Voltar", "nyx-setup-text", () => { step--; render(); }));
+    if (step > 0 && step !== 4) footer.appendChild(button("Pular", "nyx-setup-text", next));
+    if (step === 5) footer.appendChild(button("Concluir", "nyx-setup-primary", finish));
   }
-  function next() { if (step < steps.length - 1) { step++; render(); } else finish(); }
-
-  function start() {
-    if (lsGet(KEY, false) || root) return;
-    root = document.createElement("section");
-    root.className = "nyx-setup";
-    root.setAttribute("role", "dialog"); root.setAttribute("aria-modal", "true");
-    root.innerHTML = '<div class="nyx-setup-card"><div class="nyx-setup-brand">NYX <span>✦</span></div><div class="nyx-setup-step"></div><div class="nyx-setup-progress"><i></i></div><div class="nyx-setup-icon"></div><h1></h1><p class="nyx-setup-desc"></p><div class="nyx-setup-actions"></div></div>';
+  function next() {
+    if (step < steps.length - 1) { step++; render(); }
+    else finish();
+  }
+  function finish() {
+    lsSet(KEY, true);
+    if (root) root.remove();
+    root = null;
+    showToast("Configuração concluída. Aproveite o Nyx!");
+  }
+  function start(force) {
+    if (!force && lsGet(KEY, false)) return;
+    if (root) root.remove();
+    step = 0;
+    root = make("section", "nyx-setup");
+    root.setAttribute("role", "dialog");
+    root.setAttribute("aria-modal", "true");
+    root.innerHTML = '<div class="nyx-setup-card"><div class="nyx-setup-top"><span class="nyx-setup-brand">Nyx</span><span class="nyx-setup-step-count"></span></div><div class="nyx-setup-progress"></div><div class="nyx-setup-content"><div class="nyx-setup-art"></div><h1 class="nyx-setup-step-title"></h1><p class="nyx-setup-desc"></p><div class="nyx-setup-actions"></div><div class="nyx-setup-footer"></div></div></div>';
     document.body.appendChild(root);
     render();
   }
-  window.startNyxSetup = () => { lsSet(KEY, false); step=0; if (root) root.remove(); root=null; start(); };
-  window.maybeAskPermissionsFirstRun = start;
+  window.startNyxSetup = () => { lsSet(KEY, false); start(true); };
+  window.maybeAskPermissionsFirstRun = () => start(false);
+
   if (!document.getElementById("nyx-setup-style")) {
-    const style = document.createElement("style"); style.id="nyx-setup-style";
+    const style = make("style");
+    style.id = "nyx-setup-style";
     style.textContent = `
-      .nyx-setup{position:fixed;inset:0;z-index:200;background:var(--md-surface);display:grid;place-items:center;padding:24px;overflow:auto}
-      .nyx-setup-card{width:min(100%,440px);padding:28px 22px;border-radius:30px;background:var(--md-surface-container);border:1px solid var(--md-outline-variant);box-shadow:0 24px 80px #0008}
-      .nyx-setup-brand{font-weight:900;letter-spacing:.22em;color:var(--md-on-surface);font-size:18px}.nyx-setup-brand span{color:var(--md-primary)}
-      .nyx-setup-step{margin-top:34px;font-size:11px;letter-spacing:.16em;color:var(--md-on-surface-variant)}
-      .nyx-setup-progress{height:5px;background:var(--md-surface-container-highest);border-radius:9px;margin:12px 0 34px;overflow:hidden}.nyx-setup-progress i{display:block;height:100%;width:16%;background:var(--md-primary);border-radius:9px;transition:width .25s}
-      .nyx-setup-icon{font-size:42px;margin-bottom:18px}.nyx-setup-card h1{font-size:27px;line-height:1.15;margin:0 0 12px;color:var(--md-on-surface)}.nyx-setup-desc,.nyx-setup-note{font-size:14px;line-height:1.55;color:var(--md-on-surface-variant)}
-      .nyx-setup-actions{display:grid;gap:10px;margin-top:28px}.nyx-setup-actions button{min-height:48px;padding:12px 18px;border:0;border-radius:18px;font:inherit;font-size:14px;font-weight:600}
-      .nyx-setup-primary{background:var(--md-primary);color:var(--md-on-primary)}.nyx-setup-secondary{background:var(--md-secondary-container);color:var(--md-on-secondary-container)}.nyx-setup-text{background:transparent;color:var(--md-primary)}
+      @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+      .nyx-setup{position:fixed;inset:0;z-index:9999;background:#0b0b0d;color:#f4f2f6;display:grid;place-items:center;padding:22px 24px calc(22px + env(safe-area-inset-bottom));overflow:auto;font-family:Roboto,system-ui,sans-serif}
+      .nyx-setup-card{width:min(100%,390px);min-height:min(690px,calc(100dvh - 44px));border:1px solid #29282e;border-radius:27px;background:#0d0d10;padding:22px 18px 18px;display:flex;flex-direction:column;box-shadow:0 16px 45px #0008}
+      .nyx-setup-top{display:flex;justify-content:space-between;align-items:center}
+      .nyx-setup-brand{font-size:20px;font-weight:800;letter-spacing:.12em}.nyx-setup-step-count{font-size:11px;color:#8c8994}
+      .nyx-setup-progress{display:flex;gap:5px;margin:20px 0 14px}
+      .nyx-setup-progress i{height:5px;flex:1;border-radius:8px;background:#292830}.nyx-setup-progress i.active{background:#f0eef4}
+      .nyx-setup-content{flex:1;display:flex;flex-direction:column;align-items:stretch;text-align:center;justify-content:center}
+      .nyx-setup-art{height:230px;display:grid;place-items:center;margin:0 0 16px}
+      .nyx-setup-illustration{position:relative;width:190px;height:175px;display:grid;place-items:center}
+      .nyx-setup-blob{position:absolute;width:140px;height:125px;border-radius:30px;background:#24232a;transform:rotate(12deg)}
+      .nyx-setup-tile{position:relative;width:92px;height:92px;border-radius:27px;border:1.5px solid #aaa7b3;background:#302f37;display:grid;place-items:center;box-shadow:0 8px 24px #0008;transform:rotate(-6deg)}
+      .nyx-setup-tile .material-symbols-rounded{font-size:42px;color:#f4f2f6}
+      .nyx-setup-sparkle{position:absolute;left:14px;top:28px;color:#777482;font-size:22px}.nyx-setup-sparkle.small{left:auto;right:10px;top:auto;bottom:25px;font-size:13px}
+      .nyx-setup-step-title{white-space:pre-line;font-family:'Press Start 2P',monospace;font-size:clamp(15px,4.3vw,19px);line-height:1.65;font-weight:400;margin:0 0 13px;letter-spacing:-.04em}
+      .nyx-setup-desc{white-space:pre-line;color:#aaa7b1;font-size:13px;line-height:1.55;min-height:58px;margin:0 auto 24px;max-width:280px}
+      .nyx-setup-actions{display:grid;gap:10px;width:100%}
+      .nyx-setup-actions button,.nyx-setup-footer button{font-family:inherit;font-size:13px;font-weight:600;border:0;min-height:48px;border-radius:24px;padding:12px 18px}
+      .nyx-setup-primary{background:#f0eef4;color:#27252d}
+      .nyx-setup-secondary{background:#222127;color:#f0eef4;border:1px solid #34323b!important}
+      .nyx-setup-choice{white-space:pre-line;text-align:left;background:#1d1c22;color:#f0eef4;border:1px solid #393741!important;border-radius:16px!important}
+      .nyx-setup-footer{display:flex;justify-content:center;gap:18px;align-items:center;margin-top:12px;min-height:28px}
+      .nyx-setup-text{background:transparent;color:#aaa7b1;min-height:30px!important;padding:5px 12px!important}
+      .nyx-setup-folder-list{display:grid;gap:7px;margin:0 0 8px;max-height:190px;overflow:auto}
+      .nyx-setup-folder{display:flex;align-items:center;gap:12px;text-align:left;background:#19181e;color:#eee;border:1px solid #302e37!important;border-radius:14px!important;min-height:44px!important;padding:8px 12px!important}
+      .nyx-setup-folder span:nth-child(2){flex:1;font-size:12px}.nyx-setup-folder .material-symbols-rounded{font-size:19px;color:#aaa7b1}
+      .nyx-setup-empty{font-size:12px;color:#aaa7b1;margin:8px}
+      .nyx-setup-nav-preview{height:180px;border-radius:20px;background:#19181e;padding:16px;margin:0 0 18px;display:flex;flex-direction:column;justify-content:space-between}
+      .nyx-setup-nav-lines{height:38px;border-radius:8px;background:linear-gradient(#393740 0 5px,transparent 5px 13px,#302e36 13px 18px,transparent 18px)}
+      .nyx-setup-nav-bar{display:flex;justify-content:space-around;align-items:center;background:#111015;border:1px solid #514e59;border-radius:30px;padding:9px 4px}
+      .nyx-setup-nav-bar span{display:grid;place-items:center;color:#aaa7b1;width:36px;height:30px}.nyx-setup-nav-bar span.selected{background:#34323b;border-radius:18px;color:#fff}
+      .nyx-setup-nav-bar .material-symbols-rounded{font-size:18px}
+      @media(max-height:700px){.nyx-setup-card{min-height:0}.nyx-setup-art{height:160px}.nyx-setup-illustration{transform:scale(.8)}.nyx-setup-desc{margin-bottom:14px}}
     `;
     document.head.appendChild(style);
   }
