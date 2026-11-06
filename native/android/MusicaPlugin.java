@@ -9,6 +9,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.DocumentsContract;
+import android.provider.Settings;
 
 import androidx.activity.result.ActivityResult;
 import com.getcapacitor.annotation.ActivityCallback;
@@ -312,6 +313,21 @@ public class MusicaPlugin extends Plugin {
         result.put("granted", Build.VERSION.SDK_INT < 33
                 || getPermissionState("notifications") == PermissionState.GRANTED);
         call.resolve(result);
+    }
+
+    /** Abre as informações do app para o usuário revisar manualmente o uso da bateria. */
+    @PluginMethod
+    public void openBatterySettings(PluginCall call) {
+        try {
+            Activity activity = getActivity();
+            if (activity == null) throw new IllegalStateException("Tela do app indisponível");
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+            activity.startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Não foi possível abrir as configurações do app: " + e.getMessage());
+        }
     }
 
     // ================= player nativo (Media3) =================
