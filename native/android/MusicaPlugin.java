@@ -8,6 +8,8 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.provider.DocumentsContract;
 
 import androidx.activity.result.ActivityResult;
@@ -311,6 +313,27 @@ public class MusicaPlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("granted", Build.VERSION.SDK_INT < 33
                 || getPermissionState("notifications") == PermissionState.GRANTED);
+        call.resolve(result);
+    }
+
+    /** Pede para o Android não otimizar a bateria do app (evita a música ser encerrada em segundo plano). */
+    @PluginMethod
+    public void requestBatteryExemption(PluginCall call) {
+        JSObject result = new JSObject();
+        try {
+            Context ctx = getContext();
+            PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+            boolean already = pm != null && pm.isIgnoringBatteryOptimizations(ctx.getPackageName());
+            result.put("granted", already);
+            if (!already) {
+                Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                intent.setData(Uri.parse("package:" + ctx.getPackageName()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(intent);
+            }
+        } catch (Exception e) {
+            result.put("granted", false);
+        }
         call.resolve(result);
     }
 
