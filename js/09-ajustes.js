@@ -87,6 +87,7 @@ function chooseWallpaperFile() {
 
 function applySettings() {
   document.body.classList.toggle("amoled", !!settings.amoled);
+  applyNavigationStyle(settings.navigationStyle);
   applyWallpaper();
   document.body.classList.toggle("disc", !!settings.disc);
   applyShapes();
@@ -451,7 +452,10 @@ function pageComportamento() {
   sec.appendChild(
     switchRow("Inverter o gesto", "Troca a direção do arrastar entre as páginas", "swipeInvert")
   );
-  return [sec];
+  const navSec = el("div", "set-sec navigation-settings");
+  navSec.appendChild(el("div", "set-label", "Estilo da navegação"));
+  navSec.appendChild(buildNavigationStyleOptions());
+  return [sec, navSec];
 }
 
 function pagePrivacidade() {
@@ -802,10 +806,4 @@ async function openPermissions(firstRun) {
   sheet.append(sec, note, done);
   scrim.onclick = closeSheet;
   presentSheet(scrim, sheet, returnFocus);
-}
-
-// Primeira abertura: mostra opções de importação uma vez.
-async function maybeAskPermissionsFirstRun() {
-  if (lsGet("permsAsked", false)) return;
-  setTimeout(() => openPermissions(true), 1500);
 }

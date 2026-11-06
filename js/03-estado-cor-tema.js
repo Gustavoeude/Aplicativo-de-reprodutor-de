@@ -24,10 +24,15 @@ let homeMain = null;
 let lrcTargetId = null;
 let seed = { h: 215, s: 0.8 };
 let settings = Object.assign(
-  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false, font: "roboto", autoLyrics: true, autoCovers: true, nativePlayer: true, wallpaper: null, wallpaperOpacity: 0.28, wallpaperBlur: 0 },
+  { accent: "auto", amoled: false, disc: false, name: "", shapes: {}, swipe: true, swipeInvert: false, navigationStyle: "floating", font: "roboto", autoLyrics: true, autoCovers: true, nativePlayer: true, wallpaper: null, wallpaperOpacity: 0.28, wallpaperBlur: 0 },
   lsGet("settings", {})
 );
 if (!settings.shapes || typeof settings.shapes !== "object") settings.shapes = {};
+
+function applyNavigationStyle(style) {
+  settings.navigationStyle = style === "bar" ? "bar" : "floating";
+  document.body.dataset.navigationStyle = settings.navigationStyle;
+}
 
 function saveSettings() {
   lsSet("settings", settings);
