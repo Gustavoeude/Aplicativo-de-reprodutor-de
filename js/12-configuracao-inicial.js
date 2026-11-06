@@ -37,8 +37,8 @@
 
     if (step === 1) {
       actions.append(
-        button("Escolher pasta de músicas", "nyx-setup-primary", () => { root.remove(); root=null; importFolder(); }),
-        button("Selecionar arquivos", "nyx-setup-secondary", () => { root.remove(); root=null; openFilePicker(); })
+        button("Escolher pasta de músicas", "nyx-setup-primary", () => { importFolder(); }),
+        button("Selecionar arquivos", "nyx-setup-secondary", () => { openFilePicker(); })
       );
     } else if (step === 2) {
       actions.append(button("Solicitar notificações", "nyx-setup-primary", async () => {
@@ -50,6 +50,7 @@
         } catch (e) { logErr("setup:notifications", e); showToast("Não foi possível solicitar a permissão."); }
         next();
       }));
+      actions.append(button("Agora não", "nyx-setup-text", next));
     } else if (step === 3) {
       actions.append(button("Escolher pasta para ignorar", "nyx-setup-primary", async () => {
         const ok = await addDirectory("ignored");
