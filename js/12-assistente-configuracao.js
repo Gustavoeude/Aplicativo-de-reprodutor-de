@@ -48,7 +48,7 @@ function buildNavigationStyleOptions() {
 
 function configurationAssistantStepContent(step) {
   const content = el("div", "onboarding-content");
-  const iconNames = ["music_note", "folder", "notifications", "speaker_notes_off", "settings", "storage"];
+  const iconNames = ["music_note", "folder", "notifications", "folder", "settings", "storage"];
   const illustration = el("div", "onboarding-illustration");
   illustration.appendChild(el("span", "material-symbols-rounded", iconNames[step] || "music_note"));
   content.appendChild(illustration);
