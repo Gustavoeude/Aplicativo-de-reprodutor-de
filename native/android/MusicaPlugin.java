@@ -107,7 +107,8 @@ public class MusicaPlugin extends Plugin {
                     if (ignoredValue.isEmpty()) continue;
                     Uri ignoredUri = Uri.parse(ignoredValue);
                     if (treeUri.getAuthority() != null && treeUri.getAuthority().equals(ignoredUri.getAuthority())) {
-                        ignoredDocumentIds.add(DocumentsContract.getTreeDocumentId(ignoredUri));
+                        String ignoredId = folderDocumentId(ignoredUri);
+                        if (!ignoredId.isEmpty()) ignoredDocumentIds.add(ignoredId);
                     }
                 }
             }
@@ -120,6 +121,70 @@ public class MusicaPlugin extends Plugin {
             call.resolve(response);
         } catch (Exception e) {
             call.reject("Não foi possível listar a pasta: " + e.getMessage());
+        }
+    }
+
+    /** Lista subpastas do diretório escolhido pelo usuário e conta arquivos de áudio em cada uma. */
+    @PluginMethod
+    public void listFolderDirectories(PluginCall call) {
+        try {
+            String value = call.getString("uri");
+            if (value == null || value.isEmpty()) throw new IllegalArgumentException("Pasta inválida");
+            Uri treeUri = Uri.parse(value);
+            JSONArray folders = new JSONArray();
+            collectFolderDirectories(treeUri, DocumentsContract.getTreeDocumentId(treeUri), "", folders);
+            JSObject response = new JSObject();
+            response.put("folders", folders);
+            call.resolve(response);
+        } catch (Exception e) {
+            call.reject("Não foi possível listar as subpastas: " + e.getMessage());
+        }
+    }
+
+    private int collectFolderDirectories(Uri treeUri, String parentId, String prefix, JSONArray folders) throws Exception {
+        int audioCount = 0;
+        Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId);
+        String[] columns = {
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                DocumentsContract.Document.COLUMN_MIME_TYPE
+        };
+        try (Cursor cursor = getContext().getContentResolver().query(childrenUri, columns, null, null, null)) {
+            if (cursor == null) return 0;
+            int idColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID);
+            int nameColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+            int mimeColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE);
+            while (cursor.moveToNext()) {
+                String id = cursor.getString(idColumn);
+                String name = cursor.getString(nameColumn);
+                String mime = cursor.getString(mimeColumn);
+                if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
+                    String relativePath = prefix.isEmpty() ? name : prefix + "/" + name;
+                    int childAudioCount = collectFolderDirectories(treeUri, id, relativePath, folders);
+                    JSObject folder = new JSObject();
+                    folder.put("uri", DocumentsContract.buildDocumentUriUsingTree(treeUri, id).toString());
+                    folder.put("name", name == null ? "pasta" : name);
+                    folder.put("relativePath", relativePath);
+                    folder.put("audioCount", childAudioCount);
+                    folders.put(folder);
+                    audioCount += childAudioCount;
+                } else if (isAudioDocument(name, mime) && (name == null || !name.toLowerCase(java.util.Locale.ROOT).endsWith(".lrc"))) {
+                    audioCount++;
+                }
+            }
+        }
+        return audioCount;
+    }
+
+    private String folderDocumentId(Uri folderUri) {
+        try {
+            return DocumentsContract.getDocumentId(folderUri);
+        } catch (Exception ignored) {
+            try {
+                return DocumentsContract.getTreeDocumentId(folderUri);
+            } catch (Exception ignoredAgain) {
+                return "";
+            }
         }
     }
 

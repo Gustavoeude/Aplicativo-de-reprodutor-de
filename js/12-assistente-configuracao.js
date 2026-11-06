@@ -1,14 +1,25 @@
 "use strict";
 
 /* ==========================================================
-   Assistente de configuração inicial Nyx
+   Assistente inicial Nyx — fluxo visual baseado na referência
    ========================================================== */
 const CONFIG_ASSISTANT_DONE_KEY = "nyxConfigAssistantCompleted";
 let configAssistantOverlay = null;
 let configAssistantKeyHandler = null;
+let onboardingDirectoryChoices = [];
+let onboardingDirectoryLoadedKey = "";
+let onboardingDirectoryFailedKey = "";
+let onboardingDirectoryLoadingKey = "";
 
 applyNavigationStyle(settings.navigationStyle);
 
+function applyOnboardingNavigationStyle(style) {
+  settings.navigationStyle = style === "bar" ? "bar" : "floating";
+  applyNavigationStyle(settings.navigationStyle);
+  saveSettings();
+}
+
+// Seletor completo para Ajustes > Comportamento.
 function buildNavigationStyleOptions() {
   const group = el("div", "navigation-style-options");
   group.setAttribute("role", "radiogroup");
@@ -24,15 +35,14 @@ function buildNavigationStyleOptions() {
     const selected = (settings.navigationStyle || "floating") === choice.id;
     button.setAttribute("aria-checked", String(selected));
     button.classList.toggle("selected", selected);
-    const icon = el("span", "material-symbols-rounded navigation-style-icon", choice.icon);
-    const title = el("strong", "", choice.title);
-    const description = el("small", "", choice.description);
-    const check = el("span", "material-symbols-rounded navigation-style-check", selected ? "check_circle" : "add");
-    button.append(icon, title, description, check);
+    button.append(
+      el("span", "material-symbols-rounded navigation-style-icon", choice.icon),
+      el("strong", "", choice.title),
+      el("small", "", choice.description),
+      el("span", "material-symbols-rounded navigation-style-check", selected ? "check_circle" : "add")
+    );
     button.onclick = () => {
-      settings.navigationStyle = choice.id;
-      applyNavigationStyle(choice.id);
-      saveSettings();
+      applyOnboardingNavigationStyle(choice.id);
       group.querySelectorAll(".navigation-style-choice").forEach((node, index) => {
         const on = choices[index].id === choice.id;
         node.classList.toggle("selected", on);
@@ -46,206 +56,300 @@ function buildNavigationStyleOptions() {
   return group;
 }
 
-function configurationAssistantStepContent(step) {
-  const content = el("div", "onboarding-content");
-  const iconNames = ["music_note", "folder", "notifications", "folder", "settings", "storage"];
-  const illustration = el("div", "onboarding-illustration");
-  illustration.appendChild(el("span", "material-symbols-rounded", iconNames[step] || "music_note"));
-  content.appendChild(illustration);
+function onboardingArt(iconName, className) {
+  const art = el("div", "onboarding-art" + (className ? " " + className : ""));
+  const blob = el("span", "onboarding-art-blob");
+  const glint = el("span", "onboarding-art-glint");
+  const smallLeft = el("span", "onboarding-art-orbit orbit-left");
+  const smallRight = el("span", "onboarding-art-orbit orbit-right");
+  const center = el("span", "onboarding-art-center");
+  center.appendChild(el("span", "material-symbols-rounded", iconName));
+  art.append(blob, glint, smallLeft, smallRight, center);
+  return art;
+}
 
-  const title = el("h1", "onboarding-title", [
-    "Seu Nyx, do seu jeito",
-    "Dê acesso à sua música",
-    "Notificações de reprodução",
-    "Ignore pastas específicas",
-    "Escolha sua navegação",
-    "Reprodução em segundo plano"
-  ][step]);
+function onboardingNavigationSwitch() {
+  const row = el("div", "onboarding-navigation-setting");
+  const text = el("div", "onboarding-navigation-setting-text");
+  const isFloating = (settings.navigationStyle || "floating") === "floating";
+  text.append(
+    el("strong", "", "Estilo padrão"),
+    el("span", "", isFloating ? "Pílula flutuante" : "Barra tradicional")
+  );
+  const toggle = el("button", "onboarding-switch" + (isFloating ? " on" : ""));
+  toggle.type = "button";
+  toggle.setAttribute("role", "switch");
+  toggle.setAttribute("aria-label", "Usar pílula flutuante na navegação");
+  toggle.setAttribute("aria-checked", String(isFloating));
+  toggle.appendChild(el("span", "onboarding-switch-thumb"));
+  toggle.onclick = () => {
+    const next = settings.navigationStyle !== "floating";
+    applyOnboardingNavigationStyle(next ? "floating" : "bar");
+    toggle.classList.toggle("on", next);
+    toggle.setAttribute("aria-checked", String(next));
+    text.querySelector("span").textContent = next ? "Pílula flutuante" : "Barra tradicional";
+  };
+  row.append(text, toggle);
+  return row;
+}
+
+function currentAssistantStep() {
+  const state = lsGet("nyxConfigAssistant", { step: 0 });
+  return Math.max(0, Math.min(5, Number(state && state.step) || 0));
+}
+
+function setIgnoredDirectory(uri, name, checked) {
+  const current = getIgnoredFolders();
+  const next = checked
+    ? (current.some(folder => folder.uri === uri) ? current : current.concat([{ uri, name }]))
+    : current.filter(folder => folder.uri !== uri);
+  setDirectories("ignored", next);
+  syncWatchedFolder(false);
+}
+
+function ensureOnboardingDirectoryChoices() {
+  if (!MN || typeof MN.listFolderDirectories !== "function" || typeof getWatchedFolders !== "function") return;
+  const roots = getWatchedFolders();
+  if (!roots.length) return;
+  const key = roots.map(folder => folder.uri).sort().join("|");
+  if (key === onboardingDirectoryLoadedKey || key === onboardingDirectoryFailedKey || key === onboardingDirectoryLoadingKey) return;
+  onboardingDirectoryLoadingKey = key;
+  Promise.all(roots.map(folder => MN.listFolderDirectories({ uri: folder.uri })))
+    .then(results => {
+      const seen = new Set();
+      onboardingDirectoryChoices = results.flatMap(result => result && Array.isArray(result.folders) ? result.folders : [])
+        .filter(folder => folder && folder.uri && !seen.has(folder.uri) && seen.add(folder.uri))
+        .sort((a, b) => String(a.relativePath || a.name).localeCompare(String(b.relativePath || b.name), "pt-BR"));
+      onboardingDirectoryLoadedKey = key;
+    })
+    .catch(error => {
+      logErr("onboarding:list-directories", error);
+      onboardingDirectoryFailedKey = key;
+    })
+    .finally(() => {
+      onboardingDirectoryLoadingKey = "";
+      if (configAssistantOverlay && currentAssistantStep() === 3) renderConfigurationAssistant();
+    });
+}
+
+function ignoredFoldersContent() {
+  const content = el("div", "onboarding-ignored-content");
+  const roots = typeof getWatchedFolders === "function" ? getWatchedFolders() : [];
+  if (!roots.length) {
+    const empty = el("div", "onboarding-empty-folder-list", "Adicione primeiro uma pasta de músicas para ver as pastas que podem ser ignoradas.");
+    content.appendChild(empty);
+  } else if (onboardingDirectoryLoadingKey) {
+    content.appendChild(el("div", "onboarding-empty-folder-list", "Procurando pastas…"));
+  } else if (onboardingDirectoryChoices.length) {
+    const ignored = getIgnoredFolders();
+    const list = el("div", "onboarding-folder-options");
+    onboardingDirectoryChoices.forEach(folder => {
+      const row = el("label", "onboarding-folder-option");
+      const icon = el("span", "material-symbols-rounded onboarding-folder-icon", "folder");
+      const info = el("span", "onboarding-folder-info");
+      info.append(el("strong", "", folder.name), el("small", "", (Number(folder.audioCount) || 0) + ((Number(folder.audioCount) || 0) === 1 ? " música" : " músicas")));
+      const checkbox = el("input", "onboarding-folder-checkbox");
+      checkbox.type = "checkbox";
+      checkbox.checked = ignored.some(item => item.uri === folder.uri);
+      checkbox.setAttribute("aria-label", "Ignorar pasta " + folder.name);
+      checkbox.onchange = () => setIgnoredDirectory(folder.uri, folder.name, checkbox.checked);
+      row.append(icon, info, checkbox);
+      list.appendChild(row);
+    });
+    content.appendChild(list);
+  } else {
+    content.appendChild(el("div", "onboarding-empty-folder-list", onboardingDirectoryFailedKey
+      ? "Não consegui listar as subpastas. Você ainda pode escolher uma pasta manualmente."
+      : "Não encontrei subpastas dentro da biblioteca."));
+  }
+
+  if (MN && typeof addDirectory === "function") {
+    const add = el("button", "onboarding-add-folder");
+    add.type = "button";
+    add.append(el("span", "material-symbols-rounded", "add"), el("span", "", "Adicionar pasta"));
+    add.onclick = async () => {
+      add.disabled = true;
+      await addDirectory("ignored");
+      onboardingDirectoryLoadedKey = "";
+      onboardingDirectoryFailedKey = "";
+      ensureOnboardingDirectoryChoices();
+      if (configAssistantOverlay) renderConfigurationAssistant();
+    };
+    content.appendChild(add);
+  }
+  return content;
+}
+
+function configurationAssistantStepContent(step) {
+  const content = el("main", "onboarding-screen onboarding-screen-" + step);
+  const titles = [
+    "Bem-vindo ao Nyx",
+    "Permissão de mídia.",
+    "Notificações",
+    "Pastas excluídas",
+    "Navegação",
+    "Bateria"
+  ];
+  const title = el("h1", "onboarding-title", titles[step]);
+  title.id = "configuration-assistant-title";
   content.appendChild(title);
 
   if (step === 0) {
-    content.appendChild(el("p", "onboarding-description", "Vamos deixar o app pronto para sua biblioteca e suas preferências. Você pode pular qualquer etapa e mudar as escolhas depois nos Ajustes."));
-    const note = el("div", "onboarding-note");
-    note.append(el("span", "material-symbols-rounded", "check_circle"), el("span", "", "Suas músicas ficam no dispositivo. O Nyx só acessa arquivos e pastas que você escolher."));
-    content.appendChild(note);
+    content.appendChild(el("span", "onboarding-beta", "β Beta"));
+    content.appendChild(onboardingArt("music_note", "music-art"));
+    content.appendChild(el("p", "onboarding-description", "Vamos deixar tudo pronto para você."));
   }
 
   if (step === 1) {
-    content.appendChild(el("p", "onboarding-description", "Escolha uma pasta para o Nyx procurar músicas novas. No Android, a seleção segura do sistema guarda o acesso à pasta sem pedir acesso amplo ao armazenamento."));
-    if (typeof getWatchedFolders === "function" && getWatchedFolders().length) {
-      const list = el("div", "onboarding-folder-list");
-      getWatchedFolders().forEach(folder => list.appendChild(el("div", "onboarding-folder-chip", folder.name)));
-      content.appendChild(list);
-    }
-    const choose = el("button", "onboarding-action secondary");
-    choose.type = "button";
-    choose.append(el("span", "material-symbols-rounded", "folder"), el("span", "", MN && typeof addDirectory === "function" ? "Escolher pasta de músicas" : "Selecionar arquivos de música"));
-    choose.onclick = async () => {
-      if (MN && typeof addDirectory === "function") {
-        choose.disabled = true;
-        await addDirectory("watched");
-        if (configAssistantOverlay) renderConfigurationAssistant();
-      } else {
-        if (typeof openFilePicker === "function") openFilePicker();
-      }
+    content.appendChild(el("p", "onboarding-description", "O Nyx precisa acessar seus áudios para montar a biblioteca."));
+    content.appendChild(onboardingArt("library_music", "media-art"));
+    const action = el("button", "onboarding-pill-action");
+    action.type = "button";
+    action.append(el("span", "material-symbols-rounded", "folder"), el("span", "", MN && typeof addDirectory === "function" ? "Permitir acesso" : "Selecionar arquivos"));
+    action.onclick = async () => {
+      if (MN && typeof addDirectory === "function") await addDirectory("watched");
+      else if (typeof openFilePicker === "function") openFilePicker();
     };
-    content.appendChild(choose);
-    content.appendChild(el("p", "onboarding-caption", "Você também pode adicionar ou remover pastas em Ajustes › Biblioteca."));
+    content.appendChild(action);
+    content.appendChild(el("p", "onboarding-footnote", "O Android abre o seletor seguro de pastas. O acesso fica limitado ao que você escolher."));
   }
 
   if (step === 2) {
-    const isAndroid = !!(MN && typeof MN.requestNotifications === "function");
-    content.appendChild(el("p", "onboarding-description", isAndroid
-      ? "No Android 13 ou mais recente, a permissão permite exibir os controles e a notificação de mídia. Ela é opcional e você pode continuar sem concedê-la."
-      : "No navegador, os controles de mídia dependem do suporte do próprio navegador. Não é necessário conceder uma permissão de notificação ao Nyx."));
-    if (isAndroid) {
-      const status = el("p", "onboarding-status", "A permissão só será solicitada quando você tocar no botão abaixo.");
-      const request = el("button", "onboarding-action secondary");
-      request.type = "button";
-      request.append(el("span", "material-symbols-rounded", "notifications"), el("span", "", "Permitir notificações"));
-      request.onclick = async () => {
-        request.disabled = true;
+    content.appendChild(el("p", "onboarding-description", "Controle a música pela tela de bloqueio e pela barra de notificações."));
+    content.appendChild(onboardingArt("notifications", "notification-art"));
+    if (MN && typeof MN.requestNotifications === "function") {
+      const action = el("button", "onboarding-pill-action");
+      action.type = "button";
+      action.append(el("span", "material-symbols-rounded", "notifications"), el("span", "", "Ativar notificações"));
+      action.onclick = async () => {
+        action.disabled = true;
         try {
           const result = await MN.requestNotifications();
-          status.textContent = result && result.granted
-            ? "Permissão concedida. Os controles de reprodução poderão aparecer na notificação."
-            : "Permissão não concedida. Tudo bem: você ainda pode ouvir música e continuar.";
+          showToast(result && result.granted ? "Notificações ativadas." : "Você pode continuar sem essa permissão.");
         } catch (error) {
           logErr("onboarding:notifications", error);
-          status.textContent = "Não foi possível solicitar agora. Você pode revisar isso nas configurações do Android.";
+          showToast("Não foi possível solicitar a permissão agora.");
         } finally {
-          request.disabled = false;
+          action.disabled = false;
         }
       };
-      content.append(request, status);
+      content.appendChild(action);
     } else {
-      content.appendChild(el("div", "onboarding-note", "As telas bloqueadas e os controles de mídia usam os recursos do navegador; esta etapa não solicita permissões."));
+      content.appendChild(el("p", "onboarding-footnote", "No navegador, os controles usam os recursos de mídia disponíveis no próprio navegador."));
     }
   }
 
   if (step === 3) {
-    const isAndroid = !!(MN && typeof addDirectory === "function");
-    content.appendChild(el("p", "onboarding-description", isAndroid
-      ? "Se uma pasta dentro da sua biblioteca tiver arquivos que não devem ser importados, adicione-a à lista de ignorados. O conteúdo já importado não será apagado."
-      : "A lista de pastas ignoradas está disponível no app Android em Ajustes › Biblioteca."));
-    if (isAndroid) {
-      const ignored = typeof getIgnoredFolders === "function" ? getIgnoredFolders() : [];
-      if (ignored.length) {
-        const list = el("div", "onboarding-folder-list");
-        ignored.forEach(folder => {
-          const row = el("div", "onboarding-folder-row");
-          row.appendChild(el("span", "material-symbols-rounded", "folder"));
-          row.appendChild(el("span", "", folder.name));
-          const remove = el("button", "onboarding-remove", "Remover");
-          remove.type = "button";
-          remove.onclick = async () => {
-            await removeDirectory("ignored", folder.uri);
-            if (configAssistantOverlay) renderConfigurationAssistant();
-          };
-          row.appendChild(remove);
-          list.appendChild(row);
-        });
-        content.appendChild(list);
-      } else {
-        content.appendChild(el("div", "onboarding-empty", "Nenhuma pasta está sendo ignorada."));
-      }
-      const add = el("button", "onboarding-action secondary");
-      add.type = "button";
-      add.append(el("span", "material-symbols-rounded", "folder"), el("span", "", "Adicionar pasta ignorada"));
-      add.onclick = async () => {
-        add.disabled = true;
-        await addDirectory("ignored");
-        if (configAssistantOverlay) renderConfigurationAssistant();
-      };
-      content.appendChild(add);
-      content.appendChild(el("p", "onboarding-caption", "Escolha uma subpasta pertencente a um dos diretórios monitorados."));
-    }
+    content.appendChild(el("p", "onboarding-description", "Toque para ignorar uma pasta na busca."));
+    content.appendChild(ignoredFoldersContent());
   }
 
   if (step === 4) {
-    content.appendChild(el("p", "onboarding-description", "Escolha como quer acessar Início, Busca e Biblioteca. Você pode alterar esta preferência depois nos Ajustes."));
-    content.appendChild(buildNavigationStyleOptions());
+    content.appendChild(el("p", "onboarding-description", "Escolha o estilo da barra inferior."));
+    const preview = el("div", "onboarding-navigation-preview");
+    const skeleton = el("div", "onboarding-preview-skeleton");
+    skeleton.append(el("span", ""), el("span", ""));
+    const nav = el("div", "onboarding-preview-nav");
+    ["person", "search", "library_music", "more_vert"].forEach((name, index) => {
+      const item = el("span", "onboarding-preview-item" + (index === 0 ? " active" : ""));
+      item.appendChild(el("span", "material-symbols-rounded", name));
+      nav.appendChild(item);
+    });
+    preview.append(skeleton, nav);
+    content.append(preview, onboardingNavigationSwitch());
   }
 
   if (step === 5) {
-    const isAndroid = !!(MN && typeof MN.openBatterySettings === "function");
-    content.appendChild(el("p", "onboarding-description", isAndroid
-      ? "Alguns fabricantes limitam apps em segundo plano. Se a reprodução for interrompida, você pode revisar as opções de bateria do Nyx no Android."
-      : "Se estiver usando um Android, as opções de bateria ficam nas configurações do sistema. Esta etapa é opcional."));
-    if (isAndroid) {
-      const open = el("button", "onboarding-action secondary");
-      open.type = "button";
-      open.append(el("span", "material-symbols-rounded", "storage"), el("span", "", "Abrir informações do app"));
-      open.onclick = async () => {
+    content.appendChild(el("p", "onboarding-description", "Alguns aparelhos encerram apps em segundo plano. Desative a otimização."));
+    content.appendChild(onboardingArt("storage", "battery-art"));
+    if (MN && typeof MN.openBatterySettings === "function") {
+      const action = el("button", "onboarding-pill-action");
+      action.type = "button";
+      action.append(el("span", "material-symbols-rounded", "storage"), el("span", "", "Desativar otimização"));
+      action.onclick = async () => {
         try {
           await MN.openBatterySettings();
         } catch (error) {
           logErr("onboarding:battery-settings", error);
-          showToast("Não foi possível abrir as opções de bateria.");
+          showToast("Não foi possível abrir as configurações do app.");
         }
       };
-      content.append(open, el("p", "onboarding-caption", "Nas informações do app, abra Bateria para revisar o uso em segundo plano. O Nyx não muda essas opções automaticamente."));
+      content.appendChild(action);
+      content.appendChild(el("p", "onboarding-footnote", "Nas informações do Nyx, abra Bateria para ajustar o uso em segundo plano."));
     } else {
-      content.appendChild(el("div", "onboarding-note", "O assistente não altera configurações do dispositivo. Você pode concluir agora."));
+      content.appendChild(el("p", "onboarding-footnote", "Esta opção fica disponível nas configurações do app Android."));
     }
   }
   return content;
 }
 
+function renderOnboardingProgress(step) {
+  const progress = el("div", "onboarding-progress");
+  progress.setAttribute("role", "group");
+  progress.setAttribute("aria-label", "Etapas da configuração");
+  for (let i = 0; i < 6; i++) {
+    const dot = el("button", "onboarding-progress-dot" + (i === step ? " active" : i < step ? " complete" : ""));
+    dot.type = "button";
+    dot.setAttribute("aria-label", "Etapa " + (i + 1) + " de 6");
+    dot.setAttribute("aria-current", i === step ? "step" : "false");
+    dot.disabled = i > step;
+    dot.onclick = () => setConfigurationAssistantStep(i);
+    progress.appendChild(dot);
+  }
+  return progress;
+}
+
 function renderConfigurationAssistant() {
   if (!configAssistantOverlay) return;
-  const savedState = lsGet("nyxConfigAssistant", { step: 0 });
-  const state = savedState && typeof savedState === "object" ? savedState : { step: 0 };
+  const saved = lsGet("nyxConfigAssistant", { step: 0 });
+  const state = saved && typeof saved === "object" ? saved : { step: 0 };
   const step = Math.max(0, Math.min(5, Number(state.step) || 0));
   state.step = step;
   lsSet("nyxConfigAssistant", state);
+
   const panel = configAssistantOverlay.querySelector(".configuration-assistant");
   panel.replaceChildren();
-
-  const header = el("div", "onboarding-header");
-  const label = el("div", "onboarding-label", "CONFIGURAÇÃO INICIAL");
-  const close = el("button", "onboarding-close");
-  close.type = "button";
-  close.setAttribute("aria-label", "Fechar e continuar depois");
-  close.appendChild(el("span", "material-symbols-rounded", "close"));
-  close.onclick = closeConfigurationAssistant;
-  header.append(label, close);
-
-  const progress = el("div", "onboarding-progress");
-  progress.setAttribute("aria-label", "Etapa " + (step + 1) + " de 6");
-  for (let i = 0; i < 6; i++) {
-    const segment = el("span", "onboarding-progress-segment" + (i <= step ? " active" : ""));
-    segment.setAttribute("aria-hidden", "true");
-    progress.appendChild(segment);
+  const screen = configurationAssistantStepContent(step);
+  const footer = el("footer", "onboarding-footer");
+  if (step === 0) {
+    const start = el("button", "onboarding-pill-action onboarding-start");
+    start.type = "button";
+    start.append(el("span", "", "Vamos lá!"), el("span", "material-symbols-rounded", "arrow_back"));
+    start.querySelector(".material-symbols-rounded").classList.add("arrow-forward");
+    start.onclick = advanceConfigurationAssistant;
+    footer.appendChild(start);
+  } else {
+    if (step === 3 || step === 5) {
+      const skip = el("button", "onboarding-skip", "Pular");
+      skip.type = "button";
+      skip.onclick = step === 5 ? finishConfigurationAssistant : advanceConfigurationAssistant;
+      footer.appendChild(skip);
+    } else {
+      footer.appendChild(renderOnboardingProgress(step));
+    }
+    const next = el("button", "onboarding-next-arrow" + (step === 3 || step === 5 ? " labeled" : ""));
+    next.type = "button";
+    next.setAttribute("aria-label", step === 3 ? "Concluir esta etapa" : step === 5 ? "Concluir configuração" : "Próxima etapa");
+    if (step === 3 || step === 5) {
+      next.append(el("span", "", step === 3 ? "Concluir" : "Concluir"), el("span", "material-symbols-rounded", "check"));
+    } else {
+      next.appendChild(el("span", "material-symbols-rounded", "arrow_back"));
+      next.querySelector(".material-symbols-rounded").classList.add("arrow-forward");
+    }
+    next.onclick = step === 5 ? finishConfigurationAssistant : advanceConfigurationAssistant;
+    footer.appendChild(next);
   }
-
-  const body = configurationAssistantStepContent(step);
-  const footer = el("div", "onboarding-footer");
-  const skip = el("button", "onboarding-skip", step === 5 ? "Pular etapa" : "Pular configuração");
-  skip.type = "button";
-  skip.onclick = step === 5 ? advanceConfigurationAssistant : finishConfigurationAssistant;
-  const nav = el("div", "onboarding-navigation");
-  if (step > 0) {
-    const back = el("button", "onboarding-back", "Voltar");
-    back.type = "button";
-    back.onclick = () => setConfigurationAssistantStep(step - 1);
-    nav.appendChild(back);
-  }
-  const next = el("button", "onboarding-next", step === 5 ? "Concluir" : step === 0 ? "Começar" : "Continuar");
-  next.type = "button";
-  next.onclick = step === 5 ? finishConfigurationAssistant : advanceConfigurationAssistant;
-  nav.appendChild(next);
-  footer.append(skip, nav);
-  panel.append(header, progress, body, footer);
+  panel.append(screen, footer);
   panel.setAttribute("aria-labelledby", "configuration-assistant-title");
-  const title = panel.querySelector(".onboarding-title");
-  title.id = "configuration-assistant-title";
-  if (title && !panel.dataset.focusedOnce) {
+  if (!panel.dataset.focusedOnce) {
     panel.dataset.focusedOnce = "true";
     panel.focus();
-  } else if (title) {
-    next.focus();
+  } else if (footer.querySelector(".onboarding-next-arrow")) {
+    footer.querySelector(".onboarding-next-arrow").focus();
+  } else if (footer.querySelector(".onboarding-start")) {
+    footer.querySelector(".onboarding-start").focus();
   }
+  if (step === 3) ensureOnboardingDirectoryChoices();
 }
 
 function setConfigurationAssistantStep(step) {
@@ -255,10 +359,10 @@ function setConfigurationAssistantStep(step) {
 }
 
 function advanceConfigurationAssistant() {
-  const savedState = lsGet("nyxConfigAssistant", { step: 0 });
-  const state = savedState && typeof savedState === "object" ? savedState : { step: 0 };
-  if (state.step >= 5) return finishConfigurationAssistant();
-  setConfigurationAssistantStep((Number(state.step) || 0) + 1);
+  const state = lsGet("nyxConfigAssistant", { step: 0 });
+  const step = Math.max(0, Number(state && state.step) || 0);
+  if (step >= 5) return finishConfigurationAssistant();
+  setConfigurationAssistantStep(step + 1);
 }
 
 function finishConfigurationAssistant() {
@@ -284,8 +388,7 @@ function closeConfigurationAssistant() {
 }
 
 function maybeStartConfigurationAssistant() {
-  if (lsGet(CONFIG_ASSISTANT_DONE_KEY, false) || lsGet("permsAsked", false)) return;
-  if (configAssistantOverlay) return;
+  if (lsGet(CONFIG_ASSISTANT_DONE_KEY, false) || lsGet("permsAsked", false) || configAssistantOverlay) return;
   configAssistantOverlay = el("div", "configuration-assistant-scrim");
   configAssistantOverlay.setAttribute("role", "presentation");
   const panel = el("section", "configuration-assistant");
@@ -293,9 +396,6 @@ function maybeStartConfigurationAssistant() {
   panel.setAttribute("aria-modal", "true");
   panel.tabIndex = -1;
   configAssistantOverlay.appendChild(panel);
-  configAssistantOverlay.addEventListener("click", event => {
-    if (event.target === configAssistantOverlay) closeConfigurationAssistant();
-  });
   configAssistantKeyHandler = event => {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -306,7 +406,6 @@ function maybeStartConfigurationAssistant() {
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      const panel = configAssistantOverlay.querySelector(".configuration-assistant");
       if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
         event.preventDefault();
         last.focus();
