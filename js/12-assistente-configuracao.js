@@ -6,6 +6,7 @@
 const CONFIG_ASSISTANT_DONE_KEY = "nyxConfigAssistantCompleted";
 let configAssistantOverlay = null;
 let configAssistantKeyHandler = null;
+let configAssistantReturnFocus = null;
 let onboardingDirectoryChoices = [];
 let onboardingDirectoryLoadedKey = "";
 let onboardingDirectoryFailedKey = "";
@@ -322,7 +323,7 @@ function renderConfigurationAssistant() {
     if (step === 3 || step === 5) {
       const skip = el("button", "onboarding-skip", "Pular");
       skip.type = "button";
-      skip.onclick = step === 5 ? finishConfigurationAssistant : advanceConfigurationAssistant;
+      skip.onclick = finishConfigurationAssistant;
       footer.appendChild(skip);
     } else {
       footer.appendChild(renderOnboardingProgress(step));
@@ -383,12 +384,15 @@ function closeConfigurationAssistant() {
   }
   overlay.remove();
   if (!fpOpen && !document.body.classList.contains("settings-open")) document.body.classList.remove("no-scroll");
-  const returnFocus = $("homeSettings");
-  if (returnFocus) returnFocus.focus();
+  if (configAssistantReturnFocus && document.contains(configAssistantReturnFocus)) {
+    configAssistantReturnFocus.focus();
+  }
+  configAssistantReturnFocus = null;
 }
 
 function maybeStartConfigurationAssistant() {
   if (lsGet(CONFIG_ASSISTANT_DONE_KEY, false) || lsGet("permsAsked", false) || configAssistantOverlay) return;
+  configAssistantReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   configAssistantOverlay = el("div", "configuration-assistant-scrim");
   configAssistantOverlay.setAttribute("role", "presentation");
   const panel = el("section", "configuration-assistant");
