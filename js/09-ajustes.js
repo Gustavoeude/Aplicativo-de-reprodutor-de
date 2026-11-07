@@ -429,19 +429,6 @@ function pageBiblioteca() {
   permRow.append(permText, el("span", "material-symbols-rounded", "folder"));
   permRow.onclick = () => openPermissions(false);
   sec.appendChild(permRow);
-
-  const introRow = el("button", "set-row");
-  const introText = el("div", "set-row-text");
-  introText.append(
-    el("strong", "", "Refazer introdução"),
-    el("span", "", "Abre de novo o passo a passo inicial do Nyx")
-  );
-  introRow.append(introText, el("span", "material-symbols-rounded", "restart_alt"));
-  introRow.onclick = () => {
-    if (typeof closeSettings === "function") closeSettings();
-    setTimeout(startOnboarding, 200);
-  };
-  sec.appendChild(introRow);
   out.push(sec);
   return out;
 }
