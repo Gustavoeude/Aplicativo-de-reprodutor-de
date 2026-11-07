@@ -268,6 +268,13 @@ public class MusicaPlugin extends Plugin {
 
     @Override
     public void load() {
+        // Sem a barra de rolagem lateral do WebView nas listas.
+        try {
+            getBridge().executeOnMainThread(() -> {
+                getBridge().getWebView().setVerticalScrollBarEnabled(false);
+                getBridge().getWebView().setHorizontalScrollBarEnabled(false);
+            });
+        } catch (Exception ignored) { }
         MusicaPlaybackService.sink = (name, data) -> notifyListeners(name, data);
         MusicaService.listener = (action, positionMs) -> {
             JSObject o = new JSObject();
@@ -275,6 +282,27 @@ public class MusicaPlugin extends Plugin {
             o.put("position", positionMs < 0 ? 0 : positionMs / 1000.0);
             notifyListeners("action", o);
         };
+    }
+
+    /** Pinta a faixa do sistema embaixo da tela com a cor do app (em vez do cinza padrão). */
+    @PluginMethod
+    public void setSystemBars(PluginCall call) {
+        final String hex = call.getString("navColor");
+        final boolean lightBackground = call.getBoolean("light", false);
+        final Activity activity = getActivity();
+        if (activity == null || hex == null) {
+            call.resolve();
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            try {
+                android.view.Window window = activity.getWindow();
+                window.setNavigationBarColor(android.graphics.Color.parseColor(hex));
+                androidx.core.view.WindowCompat.getInsetsController(window, window.getDecorView())
+                        .setAppearanceLightNavigationBars(lightBackground);
+            } catch (Exception ignored) { }
+            call.resolve();
+        });
     }
 
     @PluginMethod

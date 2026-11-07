@@ -2734,3 +2734,6 @@ html.ob-pending body > *:not(.ob):not(script):not(link) { visibility: hidden; }
 .ob-status .ob-spin { display: block; width: 14px; height: 14px; }
 .ob-status.done .ob-spin { display: none; }
 .ob-status.done { color: var(--ob-text); }
+/* ---- sem barra de rolagem lateral ---- */
+* { scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; width: 0; height: 0; }
