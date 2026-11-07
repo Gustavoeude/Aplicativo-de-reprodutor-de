@@ -113,11 +113,14 @@ public class MusicaPlugin extends Plugin {
                 }
             }
             JSArray files = new JSArray();
+            JSArray folders = new JSArray();
             String rootId = DocumentsContract.getTreeDocumentId(treeUri);
-            collectFolderAudio(treeUri, rootId, "", files, ignoredDocumentIds);
+            collectFolderAudio(treeUri, rootId, "", files, folders, ignoredDocumentIds);
 
             JSObject response = new JSObject();
             response.put("files", files);
+            // Subpastas que têm músicas direto nelas; "uri" serve como diretório ignorado.
+            response.put("folders", folders);
             call.resolve(response);
         } catch (Exception e) {
             call.reject("Não foi possível listar a pasta: " + e.getMessage());
@@ -125,7 +128,7 @@ public class MusicaPlugin extends Plugin {
     }
 
     private void collectFolderAudio(Uri treeUri, String parentId, String prefix, JSArray files,
-                                    List<String> ignoredDocumentIds) throws Exception {
+                                    JSArray folders, List<String> ignoredDocumentIds) throws Exception {
         if (isIgnoredDocument(parentId, ignoredDocumentIds)) return;
         Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId);
         String[] columns = {
@@ -143,6 +146,7 @@ public class MusicaPlugin extends Plugin {
             int mimeColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE);
             int sizeColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_SIZE);
             int modColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_LAST_MODIFIED);
+            int directAudio = 0;
             while (cursor.moveToNext()) {
                 String id = cursor.getString(idColumn);
                 String name = cursor.getString(nameColumn);
@@ -151,7 +155,7 @@ public class MusicaPlugin extends Plugin {
 
                 if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
                     if (!isIgnoredDocument(id, ignoredDocumentIds)) {
-                        collectFolderAudio(treeUri, id, relativePath, files, ignoredDocumentIds);
+                        collectFolderAudio(treeUri, id, relativePath, files, folders, ignoredDocumentIds);
                     }
                 } else if (isAudioDocument(name, mime)) {
                     Uri fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, id);
@@ -163,7 +167,16 @@ public class MusicaPlugin extends Plugin {
                     item.put("size", cursor.isNull(sizeColumn) ? 0L : cursor.getLong(sizeColumn));
                     item.put("lastModified", cursor.isNull(modColumn) ? 0L : cursor.getLong(modColumn));
                     files.put(item);
+                    if (name == null || !name.toLowerCase(java.util.Locale.ROOT).endsWith(".lrc")) directAudio++;
                 }
+            }
+            if (directAudio > 0 && !prefix.isEmpty()) {
+                JSObject folder = new JSObject();
+                folder.put("uri", DocumentsContract.buildTreeDocumentUri(treeUri.getAuthority(), parentId).toString());
+                folder.put("name", prefix.substring(prefix.lastIndexOf('/') + 1));
+                folder.put("relativePath", prefix);
+                folder.put("count", directAudio);
+                folders.put(folder);
             }
         }
     }

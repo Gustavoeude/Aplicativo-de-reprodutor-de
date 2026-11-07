@@ -2700,3 +2700,37 @@ html.ob-pending body > *:not(.ob):not(script):not(link) { visibility: hidden; }
 .ob-primary.busy .ob-spin { display: block; }
 .ob-primary.busy svg { display: none; }
 @keyframes ob-rot { to { transform: rotate(360deg); } }
+
+/* ---- lista de pastas para ignorar (estilo lista de pastas do PixelPlayer) ---- */
+.ob-folders { flex: 1; min-height: 0; overflow-y: auto; margin-top: 16px; display: flex; flex-direction: column; gap: 8px; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+.ob-stage.ob-in .ob-folders { animation: ob-rise .6s var(--ease) .15s both; }
+.ob-frow {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; font: inherit; color: inherit;
+  padding: 12px 14px; border-radius: 18px; background: var(--ob-card); border: 1px solid transparent; cursor: pointer;
+  transition: background .2s ease, border-color .2s ease, transform .15s var(--ease);
+}
+.ob-frow:active { transform: scale(.985); }
+.ob-frow.on { background: var(--ob-card-2); border-color: var(--ob-fg); }
+.ob-fic { flex: none; display: flex; color: var(--ob-dim); }
+.ob-ftx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ob-ftx strong { font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ob-ftx small { font-size: 12px; color: var(--ob-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ob-fcount { flex: none; font-size: 12px; padding: 4px 10px; border-radius: 10px; background: var(--ob-card-2); color: var(--ob-text); }
+.ob-frow.on .ob-fcount { background: var(--ob-bg); }
+.ob-fbox {
+  flex: none; width: 24px; height: 24px; border-radius: 8px; border: 2px solid var(--ob-dim);
+  display: flex; align-items: center; justify-content: center; color: transparent; transition: background .2s, border-color .2s, color .2s;
+}
+.ob-fbox svg { width: 18px; height: 18px; }
+.ob-frow.on .ob-fbox { background: var(--ob-fg); border-color: var(--ob-fg); color: var(--ob-on-fg); }
+.ob-hint { font-size: 13px; color: var(--ob-dim); text-align: center; margin: 4px 0 2px; }
+
+/* ---- progresso da importação ---- */
+.ob-status {
+  display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 13px; color: var(--ob-dim);
+  max-height: 0; opacity: 0; overflow: hidden; transition: max-height .3s var(--ease), opacity .3s ease, margin .3s ease;
+}
+.ob-status.show { max-height: 40px; opacity: 1; margin-bottom: 8px; }
+.ob-status .ob-spin { display: block; width: 14px; height: 14px; }
+.ob-status.done .ob-spin { display: none; }
+.ob-status.done { color: var(--ob-text); }
