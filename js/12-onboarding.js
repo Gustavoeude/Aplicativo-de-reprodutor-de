@@ -483,7 +483,9 @@ function startOnboarding(instant) {
 function maybeStartOnboarding() {
   if (obRoot) return true; // já está na tela (primeira abertura)
   if (lsGet(OB_KEY, false)) return false;
-  // quem já tem músicas (atualizou o app) não precisa repetir
+  // quem já usava o app antes do tutorial existir (atualização) nunca vê o tutorial
+  if (lsGet("permsAsked", false)) { lsSet(OB_KEY, true); return false; }
+  // quem já tem músicas também não precisa
   if (songs.length) { lsSet(OB_KEY, true); return false; }
   setTimeout(startOnboarding, 300);
   return true;
